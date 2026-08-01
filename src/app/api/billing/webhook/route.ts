@@ -8,7 +8,8 @@ import {
 import type { SubscriptionStatus } from '@prisma/client';
 
 interface MercadoPagoWebhookPayload {
-  type: string;
+  type?: string;
+  topic?: string;
   data?: { id?: string };
 }
 
@@ -19,15 +20,22 @@ const STATUS_MAP: Record<MercadoPagoPreapprovalStatus, SubscriptionStatus> = {
   cancelled: 'CANCELED',
 };
 
+// A doc atual do Mercado Pago usa `type: "subscription_preapproval"` no corpo
+// da notificação, mas integrações mais antigas/outras paginas de doc citam
+// `topic`/`type` como só "subscription" ou "preapproval". Aceitamos as
+// variantes conhecidas para não perder notificações reais por causa de
+// divergência de nomenclatura entre versões da API.
+const SUBSCRIPTION_EVENT_TYPES = new Set(['subscription_preapproval', 'subscription', 'preapproval']);
+
 /**
  * Webhook do Mercado Pago: atualiza o status da Subscription conforme a
  * assinatura recorrente (Preapproval) muda de estado (autorizada, pausada
  * por falha de pagamento, ou cancelada).
  *
- * Só tratamos o tipo "subscription_preapproval" — cobranças recorrentes bem
- * sucedidas ("subscription_authorized_payment") também disparam uma
- * atualização de status na própria preapproval, então não precisamos
- * processar os dois eventos para manter o status em dia.
+ * Não tratamos "subscription_authorized_payment" (cobrança recorrente
+ * individual bem sucedida) porque cada cobrança também atualiza o status da
+ * própria preapproval, disparando o evento acima — suficiente para manter
+ * `Subscription.status` em dia sem duplicar lógica.
  */
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as MercadoPagoWebhookPayload | null;
@@ -37,6 +45,7 @@ export async function POST(request: Request) {
 
   const url = new URL(request.url);
   const dataId = payload.data?.id ?? url.searchParams.get('data.id');
+  const eventType = payload.type ?? payload.topic ?? url.searchParams.get('type') ?? url.searchParams.get('topic');
 
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
   if (secret) {
@@ -51,7 +60,7 @@ export async function POST(request: Request) {
     }
   }
 
-  if (payload.type !== 'subscription_preapproval' || !dataId) {
+  if (!dataId || !eventType || !SUBSCRIPTION_EVENT_TYPES.has(eventType)) {
     return NextResponse.json({ received: true });
   }
 
