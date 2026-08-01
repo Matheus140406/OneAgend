@@ -1,0 +1,198 @@
+// OneAgend — schema multi-tenant de agendamento online
+// Cada linha de negocio (Tenant) tem seus proprios profissionais, servicos,
+// clientes e agendamentos. Nao ha compartilhamento de dados entre tenants.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Plan {
+  SOLO // 1 profissional
+  STUDIO // ate 5 profissionais
+  REDE // profissionais ilimitados
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum UserRole {
+  OWNER
+  PROFESSIONAL
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  NO_SHOW
+  DONE
+}
+
+model Tenant {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  businessType String // tipo de negocio em texto livre, escolhido pelo dono
+  plan         Plan     @default(SOLO)
+  // timezone IANA usado para calcular expediente/folgas (ex: America/Sao_Paulo)
+  timezone     String   @default("America/Sao_Paulo")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscription  Subscription?
+  users         User[]
+  professionals Professional[]
+  services      Service[]
+  clients       Client[]
+  appointments  Appointment[]
+
+  @@index([slug])
+}
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  tenantId            String             @unique
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan                Plan
+  status              SubscriptionStatus @default(TRIALING)
+  asaasCustomerId     String?
+  asaasSubscriptionId String?
+  currentPeriodEnd    DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+// User.id é o mesmo id do usuario no Supabase Auth (auth.users.id)
+model User {
+  id             String        @id
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email          String        @unique
+  name           String
+  role           UserRole      @default(OWNER)
+  professionalId String?       @unique
+  professional   Professional? @relation(fields: [professionalId], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([tenantId])
+}
+
+model Professional {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user         User?
+  workingHours WorkingHour[]
+  timeOffs     TimeOff[]
+  services     ServiceOnProfessional[]
+  appointments Appointment[]
+
+  @@index([tenantId])
+}
+
+// Expediente semanal recorrente do profissional.
+// weekday: 0 = domingo ... 6 = sabado (mesma convencao de Date#getDay em America/Sao_Paulo)
+model WorkingHour {
+  id             String       @id @default(cuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  weekday        Int
+  startTime      String // "HH:mm"
+  endTime        String // "HH:mm"
+
+  @@index([professionalId, weekday])
+}
+
+// Bloqueio/folga pontual do profissional (ferias, atestado, compromisso, etc).
+model TimeOff {
+  id             String       @id @default(cuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  startsAt       DateTime
+  endsAt         DateTime
+  reason         String?
+
+  @@index([professionalId, startsAt, endsAt])
+}
+
+model Service {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  durationMinutes Int
+  priceCents      Int
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  professionals ServiceOnProfessional[]
+  appointments  Appointment[]
+
+  @@index([tenantId])
+}
+
+// Vinculo N:N entre profissionais e servicos que cada um executa.
+model ServiceOnProfessional {
+  serviceId      String
+  professionalId String
+  service        Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, professionalId])
+  @@index([professionalId])
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  whatsapp  String // formato E.164, ex: +5511999999999
+  createdAt DateTime @default(now())
+
+  appointments Appointment[]
+
+  @@unique([tenantId, whatsapp])
+  @@index([tenantId])
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  tenantId       String
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional      @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  serviceId      String
+  service        Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  startsAt       DateTime
+  endsAt         DateTime
+  status         AppointmentStatus @default(PENDING)
+
+  // controle de idempotencia dos lembretes disparados pelo cron
+  reminder24hSentAt DateTime?
+  reminder1hSentAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Indice usado pela checagem de sobreposicao de horario (regra de negocio critica)
+  @@index([professionalId, startsAt, endsAt])
+  @@index([tenantId, startsAt])
+  @@index([clientId])
+}
