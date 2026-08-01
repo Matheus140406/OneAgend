@@ -1,55 +1,79 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import {
+  getMercadoPagoSubscription,
+  verifyMercadoPagoSignature,
+  type MercadoPagoPreapprovalStatus,
+} from '@/lib/billing/mercadopago';
+import type { SubscriptionStatus } from '@prisma/client';
 
-interface AsaasWebhookPayload {
-  event: string;
-  payment?: {
-    subscription?: string;
-    status?: string;
-    dueDate?: string;
-  };
+interface MercadoPagoWebhookPayload {
+  type: string;
+  data?: { id?: string };
 }
 
-const ACTIVE_EVENTS = new Set(['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED']);
-const PAST_DUE_EVENTS = new Set(['PAYMENT_OVERDUE']);
-const CANCELED_EVENTS = new Set(['PAYMENT_DELETED', 'PAYMENT_REFUNDED', 'SUBSCRIPTION_DELETED']);
+const STATUS_MAP: Record<MercadoPagoPreapprovalStatus, SubscriptionStatus> = {
+  pending: 'TRIALING',
+  authorized: 'ACTIVE',
+  paused: 'PAST_DUE',
+  cancelled: 'CANCELED',
+};
 
-/** Webhook do Asaas: atualiza o status da Subscription conforme o pagamento recorrente. */
+/**
+ * Webhook do Mercado Pago: atualiza o status da Subscription conforme a
+ * assinatura recorrente (Preapproval) muda de estado (autorizada, pausada
+ * por falha de pagamento, ou cancelada).
+ *
+ * Só tratamos o tipo "subscription_preapproval" — cobranças recorrentes bem
+ * sucedidas ("subscription_authorized_payment") também disparam uma
+ * atualização de status na própria preapproval, então não precisamos
+ * processar os dois eventos para manter o status em dia.
+ */
 export async function POST(request: Request) {
-  const configuredToken = process.env.ASAAS_WEBHOOK_TOKEN;
-  if (configuredToken) {
-    const receivedToken = request.headers.get('asaas-access-token');
-    if (receivedToken !== configuredToken) {
-      return NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 });
+  const payload = (await request.json().catch(() => null)) as MercadoPagoWebhookPayload | null;
+  if (!payload) {
+    return NextResponse.json({ error: 'Payload inválido.' }, { status: 400 });
+  }
+
+  const url = new URL(request.url);
+  const dataId = payload.data?.id ?? url.searchParams.get('data.id');
+
+  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+  if (secret) {
+    const valid = verifyMercadoPagoSignature({
+      xSignature: request.headers.get('x-signature'),
+      xRequestId: request.headers.get('x-request-id'),
+      dataId: dataId ?? null,
+      secret,
+    });
+    if (!valid) {
+      return NextResponse.json({ error: 'Assinatura inválida.' }, { status: 401 });
     }
   }
 
-  const payload = (await request.json()) as AsaasWebhookPayload;
-  const asaasSubscriptionId = payload.payment?.subscription;
-
-  if (!asaasSubscriptionId) {
+  if (payload.type !== 'subscription_preapproval' || !dataId) {
     return NextResponse.json({ received: true });
   }
 
-  const subscription = await prisma.subscription.findFirst({ where: { asaasSubscriptionId } });
-  if (!subscription) {
+  const subscriptionRecord = await prisma.subscription.findFirst({
+    where: { mercadoPagoPreapprovalId: dataId },
+  });
+  if (!subscriptionRecord) {
     return NextResponse.json({ received: true });
   }
 
-  let status: 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | undefined;
-  if (ACTIVE_EVENTS.has(payload.event)) status = 'ACTIVE';
-  else if (PAST_DUE_EVENTS.has(payload.event)) status = 'PAST_DUE';
-  else if (CANCELED_EVENTS.has(payload.event)) status = 'CANCELED';
+  const preapproval = await getMercadoPagoSubscription(dataId);
+  const status = STATUS_MAP[preapproval.status];
 
-  if (status) {
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        status,
-        currentPeriodEnd: payload.payment?.dueDate ? new Date(payload.payment.dueDate) : subscription.currentPeriodEnd,
-      },
-    });
-  }
+  await prisma.subscription.update({
+    where: { id: subscriptionRecord.id },
+    data: {
+      status,
+      currentPeriodEnd: preapproval.auto_recurring?.next_payment_date
+        ? new Date(preapproval.auto_recurring.next_payment_date)
+        : subscriptionRecord.currentPeriodEnd,
+    },
+  });
 
   return NextResponse.json({ received: true });
 }

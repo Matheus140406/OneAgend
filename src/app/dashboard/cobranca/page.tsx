@@ -57,7 +57,7 @@ export default async function BillingPage({
           </div>
           <form action={startCheckout}>
             <Button type="submit" size="lg">
-              {subscription?.asaasSubscriptionId ? 'Atualizar pagamento' : 'Iniciar cobrança'}
+              {subscription?.mercadoPagoPreapprovalId ? 'Atualizar pagamento' : 'Iniciar cobrança'}
             </Button>
           </form>
         </CardContent>

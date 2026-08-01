@@ -12,13 +12,13 @@ texto livre escolhido pelo dono no cadastro).
 - Tailwind CSS + componentes no estilo shadcn/ui
 - WhatsApp Cloud API para lembretes (função isolada, fácil de trocar de provedor)
 - Vercel Cron para disparo dos lembretes 24h/1h antes
-- Asaas para cobrança recorrente dos planos Solo / Studio / Rede
+- Mercado Pago (Assinaturas/Preapproval) para cobrança recorrente dos planos Solo / Studio / Rede
 
 ## Setup local
 
 ```bash
 npm install
-cp .env.example .env.local   # preencha com suas credenciais Supabase/Asaas/WhatsApp
+cp .env.example .env.local   # preencha com suas credenciais Supabase/Mercado Pago/WhatsApp
 npx prisma migrate dev       # cria o schema no Postgres (DATABASE_URL)
 npm run dev
 ```
@@ -52,7 +52,8 @@ sobreposição com outro agendamento) e o caminho feliz.
   (`vercel.json`) que envia lembretes de WhatsApp 24h/1h antes.
 - `src/app/dashboard` — painel autenticado (hoje, agenda semanal, clientes,
   profissionais, serviços, cobrança).
-- `src/lib/billing/asaas.ts` — integração isolada com a API do Asaas.
+- `src/lib/billing/mercadopago.ts` — integração isolada com a API de Assinaturas
+  (Preapproval) do Mercado Pago, incluindo validação HMAC do webhook.
 - `src/lib/whatsapp/client.ts` — integração isolada com a WhatsApp Cloud API.
 
 ## Deploy
@@ -62,5 +63,7 @@ sobreposição com outro agendamento) e o caminho feliz.
 3. O `vercel.json` já registra o cron de lembretes a cada 15 minutos
    (requer plano Vercel com cron mais frequente que diário; em planos
    gratuitos ajuste a expressão para uma frequência suportada).
-4. Configure o webhook do Asaas apontando para `/api/billing/webhook`, com o
-   token em `ASAAS_WEBHOOK_TOKEN` batendo com o cabeçalho `asaas-access-token`.
+4. Configure o webhook do Mercado Pago (Suas integrações → Webhooks) apontando
+   para `/api/billing/webhook`, assinando o evento "Assinaturas" (subscription
+   preapproval). Copie a chave secreta gerada para `MERCADOPAGO_WEBHOOK_SECRET`
+   — ela é usada para validar o header `x-signature` de cada notificação.

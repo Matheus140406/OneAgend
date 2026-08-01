@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCurrentUser } from '@/lib/auth';
-import { createAsaasCustomer, createAsaasSubscription, getFirstPaymentInvoiceUrl } from '@/lib/billing/asaas';
+import { createMercadoPagoSubscription } from '@/lib/billing/mercadopago';
 import { PLAN_DETAILS } from '@/lib/plans';
 import type { Plan } from '@prisma/client';
 
@@ -38,29 +38,21 @@ export async function startCheckout() {
 
   const subscription = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: user.tenantId } });
 
-  let asaasCustomerId = subscription.asaasCustomerId;
-  if (!asaasCustomerId) {
-    const customer = await createAsaasCustomer({ name: user.tenant.name, email: user.email });
-    asaasCustomerId = customer.id;
-  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
-  const asaasSubscription = await createAsaasSubscription({
-    customerId: asaasCustomerId,
+  const mercadoPagoSubscription = await createMercadoPagoSubscription({
+    payerEmail: user.email,
+    reason: `OneAgend — plano ${PLAN_DETAILS[subscription.plan].label}`,
     priceCents: PLAN_DETAILS[subscription.plan].priceCents,
-    description: `OneAgend — plano ${PLAN_DETAILS[subscription.plan].label}`,
+    externalReference: user.tenantId,
+    backUrl: `${appUrl}/dashboard/cobranca`,
   });
 
   await prisma.subscription.update({
     where: { tenantId: user.tenantId },
-    data: { asaasCustomerId, asaasSubscriptionId: asaasSubscription.id },
+    data: { mercadoPagoPreapprovalId: mercadoPagoSubscription.id },
   });
 
-  const invoiceUrl = await getFirstPaymentInvoiceUrl(asaasSubscription.id);
   revalidatePath('/dashboard/cobranca');
-
-  if (invoiceUrl) {
-    redirect(invoiceUrl);
-  }
-
-  redirect('/dashboard/cobranca?error=Assinatura criada, mas não foi possível obter o link de pagamento.');
+  redirect(mercadoPagoSubscription.initPoint);
 }
