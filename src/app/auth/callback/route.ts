@@ -22,11 +22,20 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/login?error=Falha ao autenticar com o Google.', url.origin));
   }
 
-  const existingUser = await prisma.user.findUnique({ where: { id: data.user.id } });
+  try {
+    const existingUser = await prisma.user.findUnique({ where: { id: data.user.id } });
 
-  if (existingUser) {
-    return NextResponse.redirect(new URL('/dashboard', url.origin));
+    if (existingUser) {
+      return NextResponse.redirect(new URL('/dashboard', url.origin));
+    }
+
+    return NextResponse.redirect(new URL('/cadastro/completar', url.origin));
+  } catch (dbError) {
+    // Sessao no Supabase Auth ja foi criada com sucesso; um erro aqui e do
+    // nosso banco (ex: schema ainda nao migrado), nao da autenticacao.
+    console.error('Falha ao consultar usuario apos login OAuth:', dbError);
+    return NextResponse.redirect(
+      new URL('/login?error=Não foi possível concluir o login. Tente novamente em instantes.', url.origin),
+    );
   }
-
-  return NextResponse.redirect(new URL('/cadastro/completar', url.origin));
 }
