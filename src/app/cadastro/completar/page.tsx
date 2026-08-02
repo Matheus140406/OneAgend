@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -10,14 +10,16 @@ import { Label } from '@/components/ui/label';
 import { cn, formatPriceFromCents } from '@/lib/utils';
 import { PLAN_DETAILS, PLAN_ORDER } from '@/lib/plans';
 import { slugify } from '@/lib/slug';
-import { GoogleButton } from '@/components/auth/google-button';
 import type { Plan } from '@prisma/client';
 
-export default function CadastroPage() {
+/**
+ * Segunda etapa do cadastro para quem entrou via login social (Google): a
+ * conta no Supabase Auth já existe, falta só criar o Tenant/negócio.
+ */
+export default function CompletarCadastroPage() {
   const router = useRouter();
+  const [checkingSession, setCheckingSession] = useState(true);
   const [ownerName, setOwnerName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [tenantName, setTenantName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
@@ -28,48 +30,48 @@ export default function CadastroPage() {
 
   const effectiveSlug = useMemo(() => (slugEdited ? slug : slugify(tenantName)), [slug, slugEdited, tenantName]);
 
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        router.replace('/login');
+        return;
+      }
+      const metadata = data.user.user_metadata as { full_name?: string; name?: string } | null;
+      setOwnerName(metadata?.full_name ?? metadata?.name ?? '');
+      setCheckingSession(false);
+    });
+  }, [router]);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError(null);
 
-    const supabase = createSupabaseBrowserClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
-
-    if (signUpError) {
-      setLoading(false);
-      setError(signUpError.message);
-      return;
-    }
-
-    if (!data.session) {
-      setLoading(false);
-      setError('Confirme seu e-mail para concluir o cadastro e depois faca login.');
-      return;
-    }
-
     const response = await fetch('/api/tenants/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tenantName,
-        slug: effectiveSlug,
-        businessType,
-        ownerName,
-        plan,
-      }),
+      body: JSON.stringify({ tenantName, slug: effectiveSlug, businessType, ownerName, plan }),
     });
 
     setLoading(false);
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setError(body.error ?? 'Nao foi possivel concluir o cadastro.');
+      setError(body.error ?? 'Não foi possível concluir o cadastro.');
       return;
     }
 
     router.push('/dashboard');
     router.refresh();
+  }
+
+  if (checkingSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <p className="text-sm text-base-500">Carregando...</p>
+      </main>
+    );
   }
 
   return (
@@ -78,45 +80,14 @@ export default function CadastroPage() {
         <Link href="/" className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-accent">
           OneAgend
         </Link>
-        <h1 className="mt-4 font-display text-2xl font-bold text-base-100">Criar minha agenda</h1>
-        <p className="mt-1 text-sm text-base-400">
-          Leva menos de 2 minutos. Você poderá cadastrar profissionais e serviços em seguida.
-        </p>
+        <h1 className="mt-4 font-display text-2xl font-bold text-base-100">Falta pouco</h1>
+        <p className="mt-1 text-sm text-base-400">Agora conte pra gente sobre o seu negócio.</p>
 
-        <div className="mt-8">
-          <GoogleButton />
-        </div>
-
-        <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-base-800" />
-          <span className="text-xs text-base-500">ou</span>
-          <div className="h-px flex-1 bg-base-800" />
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ownerName">Seu nome</Label>
             <Input id="ownerName" required value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
           </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="email">E-mail</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="password">Senha</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          <hr className="border-base-800" />
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="tenantName">Nome do negócio</Label>
@@ -190,13 +161,6 @@ export default function CadastroPage() {
             {loading ? 'Criando...' : 'Criar minha agenda'}
           </Button>
         </form>
-
-        <p className="mt-6 text-center text-sm text-base-400">
-          Já tem uma conta?{' '}
-          <Link href="/login" className="text-accent hover:underline">
-            Entrar
-          </Link>
-        </p>
       </div>
     </main>
   );

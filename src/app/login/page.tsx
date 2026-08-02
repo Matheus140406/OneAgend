@@ -7,13 +7,14 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { GoogleButton } from '@/components/auth/google-button';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(searchParams.get('error'));
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -41,7 +42,18 @@ function LoginForm() {
         OneAgend
       </Link>
       <h1 className="mt-4 font-display text-2xl font-bold text-base-100">Entrar</h1>
-      <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
+
+      <div className="mt-8">
+        <GoogleButton />
+      </div>
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="h-px flex-1 bg-base-800" />
+        <span className="text-xs text-base-500">ou</span>
+        <div className="h-px flex-1 bg-base-800" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">E-mail</Label>
           <Input

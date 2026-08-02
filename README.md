@@ -27,6 +27,28 @@ No Supabase, desative a confirmação por e-mail em Authentication → Settings
 para o fluxo de cadastro (`/cadastro`) funcionar sem etapa extra, ou ajuste
 o fluxo para aguardar a confirmação.
 
+### Login com Google
+
+O botão "Continuar com Google" (em `/login` e `/cadastro`) usa o provider
+OAuth do Supabase Auth. O código do app só chama
+`supabase.auth.signInWithOAuth({ provider: 'google' })` — a configuração das
+credenciais do Google fica no painel, não no repositório:
+
+1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   em "Authorized redirect URIs" do OAuth Client, adicione
+   `https://<seu-projeto>.supabase.co/auth/v1/callback`.
+2. No painel do Supabase, em Authentication → Providers → Google, ative o
+   provider e cole o **Client ID** e o **Client Secret** do Google (o Client
+   Secret nunca deve ir para o `.env` do OneAgend — só existe nesse painel).
+3. Em Authentication → URL Configuration, adicione
+   `http://localhost:3000/auth/callback` (e a URL de produção equivalente)
+   em "Redirect URLs".
+
+Quem entra pela primeira vez via Google ainda não tem um `Tenant`/negócio
+cadastrado: o callback (`src/app/auth/callback/route.ts`) detecta isso e
+manda para `/cadastro/completar`, que só pede os dados do negócio (o
+cadastro no Supabase Auth já existe).
+
 ## Testes
 
 A regra de negócio crítica (validação de conflito de horário) fica em
