@@ -13,9 +13,9 @@ datasource db {
 }
 
 enum Plan {
-  SOLO // 1 profissional
-  STUDIO // ate 5 profissionais
-  REDE // profissionais ilimitados
+  BASICO // 1 profissional
+  ELITE // ate 5 profissionais
+  PLATINA // profissionais ilimitados
 }
 
 enum SubscriptionStatus {
@@ -43,7 +43,7 @@ model Tenant {
   name         String
   slug         String   @unique
   businessType String // tipo de negocio em texto livre, escolhido pelo dono
-  plan         Plan     @default(SOLO)
+  plan         Plan     @default(BASICO)
   // timezone IANA usado para calcular expediente/folgas (ex: America/Sao_Paulo)
   timezone     String   @default("America/Sao_Paulo")
   createdAt    DateTime @default(now())

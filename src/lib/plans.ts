@@ -4,27 +4,27 @@ export const PLAN_DETAILS: Record<
   Plan,
   { label: string; maxProfessionals: number | null; priceCents: number; description: string }
 > = {
-  SOLO: {
-    label: 'Solo',
+  BASICO: {
+    label: 'Básico',
     maxProfessionals: 1,
-    priceCents: 4990,
+    priceCents: 1420,
     description: '1 profissional',
   },
-  STUDIO: {
-    label: 'Studio',
+  ELITE: {
+    label: 'Elite',
     maxProfessionals: 5,
-    priceCents: 9990,
+    priceCents: 4990,
     description: 'Até 5 profissionais',
   },
-  REDE: {
-    label: 'Rede',
+  PLATINA: {
+    label: 'Platina',
     maxProfessionals: null,
-    priceCents: 19990,
+    priceCents: 9990,
     description: 'Profissionais ilimitados',
   },
 };
 
-export const PLAN_ORDER: Plan[] = ['SOLO', 'STUDIO', 'REDE'];
+export const PLAN_ORDER: Plan[] = ['BASICO', 'ELITE', 'PLATINA'];
 
 export function planAllowsProfessionalCount(plan: Plan, count: number): boolean {
   const max = PLAN_DETAILS[plan].maxProfessionals;

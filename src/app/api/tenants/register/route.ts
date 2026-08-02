@@ -9,7 +9,7 @@ const registerSchema = z.object({
   slug: z.string().refine(isValidSlug, 'Slug invalido. Use letras minusculas, numeros e hifens.'),
   businessType: z.string().min(2).max(80),
   ownerName: z.string().min(2).max(120),
-  plan: z.enum(['SOLO', 'STUDIO', 'REDE']).default('SOLO'),
+  plan: z.enum(['BASICO', 'ELITE', 'PLATINA']).default('BASICO'),
 });
 
 /**

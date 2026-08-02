@@ -24,7 +24,7 @@ export default function CompletarCadastroPage() {
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
   const [businessType, setBusinessType] = useState('');
-  const [plan, setPlan] = useState<Plan>('SOLO');
+  const [plan, setPlan] = useState<Plan>('BASICO');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
