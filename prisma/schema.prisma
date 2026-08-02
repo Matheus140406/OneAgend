@@ -198,3 +198,11 @@ model Appointment {
   @@index([tenantId, startsAt])
   @@index([clientId])
 }
+
+// Contador de rate limiting por janela fixa (chave = "<rota>:<identificador>:<janela>").
+// Linhas de janelas antigas se acumulam; limpeza periodica pode ser feita depois se necessario.
+model RateLimitHit {
+  key       String   @id
+  count     Int      @default(1)
+  updatedAt DateTime @updatedAt
+}

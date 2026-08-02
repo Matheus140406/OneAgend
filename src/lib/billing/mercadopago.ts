@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
+import { fetchWithRetry } from '@/lib/http/fetch-with-retry';
 
 /**
  * Cliente isolado para a API de Assinaturas (Preapproval) do Mercado Pago.
@@ -16,7 +17,7 @@ async function mercadoPagoFetch<T>(path: string, init?: RequestInit): Promise<T>
     throw new Error('MERCADOPAGO_ACCESS_TOKEN nao configurado.');
   }
 
-  const response = await fetch(`${getBaseUrl()}${path}`, {
+  const response = await fetchWithRetry(`${getBaseUrl()}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',

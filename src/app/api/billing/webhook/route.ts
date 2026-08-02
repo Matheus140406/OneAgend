@@ -64,25 +64,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  const subscriptionRecord = await prisma.subscription.findFirst({
-    where: { mercadoPagoPreapprovalId: dataId },
-  });
-  if (!subscriptionRecord) {
+  try {
+    const subscriptionRecord = await prisma.subscription.findFirst({
+      where: { mercadoPagoPreapprovalId: dataId },
+    });
+    if (!subscriptionRecord) {
+      return NextResponse.json({ received: true });
+    }
+
+    const preapproval = await getMercadoPagoSubscription(dataId);
+    const status = STATUS_MAP[preapproval.status];
+
+    await prisma.subscription.update({
+      where: { id: subscriptionRecord.id },
+      data: {
+        status,
+        currentPeriodEnd: preapproval.auto_recurring?.next_payment_date
+          ? new Date(preapproval.auto_recurring.next_payment_date)
+          : subscriptionRecord.currentPeriodEnd,
+      },
+    });
+
     return NextResponse.json({ received: true });
+  } catch (error) {
+    // Resposta != 2xx faz o Mercado Pago reenviar o webhook depois —
+    // comportamento correto para falhas transitorias (rede, banco fora do ar).
+    console.error('Falha ao processar webhook do Mercado Pago:', error);
+    return NextResponse.json({ error: 'Erro interno ao processar notificação.' }, { status: 500 });
   }
-
-  const preapproval = await getMercadoPagoSubscription(dataId);
-  const status = STATUS_MAP[preapproval.status];
-
-  await prisma.subscription.update({
-    where: { id: subscriptionRecord.id },
-    data: {
-      status,
-      currentPeriodEnd: preapproval.auto_recurring?.next_payment_date
-        ? new Date(preapproval.auto_recurring.next_payment_date)
-        : subscriptionRecord.currentPeriodEnd,
-    },
-  });
-
-  return NextResponse.json({ received: true });
 }

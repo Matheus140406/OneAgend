@@ -49,28 +49,36 @@ export async function dispatchDueReminders(
     let failed = 0;
 
     for (const appointment of dueAppointments) {
-      const timeLabel = new Intl.DateTimeFormat('pt-BR', {
-        timeZone: 'America/Sao_Paulo',
-        day: '2-digit',
-        month: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(appointment.startsAt);
+      // Cada agendamento e isolado: uma falha aqui (rede, banco) nunca deve
+      // impedir o envio do lembrete para os demais agendamentos do lote.
+      try {
+        const timeLabel = new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(appointment.startsAt);
 
-      const result = await sendWhatsappTemplateMessage({
-        to: appointment.client.whatsapp,
-        templateName: process.env.WHATSAPP_TEMPLATE_LEMBRETE ?? 'lembrete_agendamento',
-        bodyParameters: [appointment.client.name, appointment.service.name, timeLabel],
-      });
-
-      if (result.success) {
-        sent += 1;
-        await prisma.appointment.update({
-          where: { id: appointment.id },
-          data: { [config.sentAtField]: now },
+        const result = await sendWhatsappTemplateMessage({
+          to: appointment.client.whatsapp,
+          templateName: process.env.WHATSAPP_TEMPLATE_LEMBRETE ?? 'lembrete_agendamento',
+          bodyParameters: [appointment.client.name, appointment.service.name, timeLabel],
         });
-      } else {
+
+        if (result.success) {
+          sent += 1;
+          await prisma.appointment.update({
+            where: { id: appointment.id },
+            data: { [config.sentAtField]: now },
+          });
+        } else {
+          failed += 1;
+          console.error(`Falha ao enviar lembrete ${config.kind} do agendamento ${appointment.id}:`, result.error);
+        }
+      } catch (error) {
         failed += 1;
+        console.error(`Erro inesperado ao processar lembrete ${config.kind} do agendamento ${appointment.id}:`, error);
       }
     }
 

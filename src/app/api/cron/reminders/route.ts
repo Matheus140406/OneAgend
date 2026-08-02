@@ -15,7 +15,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 });
   }
 
-  const results = await dispatchDueReminders(prisma);
-
-  return NextResponse.json({ results });
+  try {
+    const results = await dispatchDueReminders(prisma);
+    return NextResponse.json({ results });
+  } catch (error) {
+    console.error('Falha ao rodar o cron de lembretes:', error);
+    return NextResponse.json({ error: 'Erro interno ao processar lembretes.' }, { status: 500 });
+  }
 }

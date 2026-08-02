@@ -40,19 +40,29 @@ export async function startCheckout() {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
-  const mercadoPagoSubscription = await createMercadoPagoSubscription({
-    payerEmail: user.email,
-    reason: `OneAgend — plano ${PLAN_DETAILS[subscription.plan].label}`,
-    priceCents: PLAN_DETAILS[subscription.plan].priceCents,
-    externalReference: user.tenantId,
-    backUrl: `${appUrl}/dashboard/cobranca`,
-  });
+  // Nao envolve o redirect() de sucesso no try: ele lanca um sinal interno do
+  // Next.js que nao pode ser capturado por engano por este catch.
+  let initPoint: string;
+  try {
+    const mercadoPagoSubscription = await createMercadoPagoSubscription({
+      payerEmail: user.email,
+      reason: `OneAgend — plano ${PLAN_DETAILS[subscription.plan].label}`,
+      priceCents: PLAN_DETAILS[subscription.plan].priceCents,
+      externalReference: user.tenantId,
+      backUrl: `${appUrl}/dashboard/cobranca`,
+    });
 
-  await prisma.subscription.update({
-    where: { tenantId: user.tenantId },
-    data: { mercadoPagoPreapprovalId: mercadoPagoSubscription.id },
-  });
+    await prisma.subscription.update({
+      where: { tenantId: user.tenantId },
+      data: { mercadoPagoPreapprovalId: mercadoPagoSubscription.id },
+    });
+
+    initPoint = mercadoPagoSubscription.initPoint;
+  } catch (error) {
+    console.error('Falha ao iniciar checkout do Mercado Pago:', error);
+    redirect('/dashboard/cobranca?error=Não foi possível iniciar a cobrança agora. Tente novamente em instantes.');
+  }
 
   revalidatePath('/dashboard/cobranca');
-  redirect(mercadoPagoSubscription.initPoint);
+  redirect(initPoint);
 }
