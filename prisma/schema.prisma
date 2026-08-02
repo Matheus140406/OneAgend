@@ -68,6 +68,8 @@ model Subscription {
   // id da assinatura recorrente (Preapproval) no Mercado Pago
   mercadoPagoPreapprovalId String?            @unique
   currentPeriodEnd         DateTime?
+  // fim do teste gratis de 7 dias, definido na criacao do Tenant
+  trialEndsAt              DateTime?
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 }

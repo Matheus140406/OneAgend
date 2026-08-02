@@ -12,7 +12,7 @@ export async function getCurrentUser() {
 
   return prisma.user.findUnique({
     where: { id: user.id },
-    include: { tenant: true, professional: true },
+    include: { tenant: { include: { subscription: true } }, professional: true },
   });
 }
 

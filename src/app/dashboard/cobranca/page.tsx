@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn, formatPriceFromCents } from '@/lib/utils';
 import { PLAN_DETAILS, PLAN_ORDER } from '@/lib/plans';
+import { isTrialExpired, trialDaysRemaining } from '@/lib/billing/subscription-status';
 import { changePlan, startCheckout } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,23 @@ export default async function BillingPage({
               {PLAN_DETAILS[currentPlan].description} · {formatPriceFromCents(PLAN_DETAILS[currentPlan].priceCents)}/mês
             </p>
           </div>
+
+          {subscription?.status === 'TRIALING' &&
+            (isTrialExpired(subscription) ? (
+              <p className="text-sm text-danger">
+                Seu teste grátis de 7 dias acabou. Assine para reativar a agenda pública.
+              </p>
+            ) : (
+              <p className="text-sm text-base-400">
+                Você está no teste grátis de 7 dias —{' '}
+                <span className="font-medium text-base-200">
+                  {trialDaysRemaining(subscription)} dia{trialDaysRemaining(subscription) === 1 ? '' : 's'} restante
+                  {trialDaysRemaining(subscription) === 1 ? '' : 's'}
+                </span>
+                . Assine quando quiser para não perder o acesso depois.
+              </p>
+            ))}
+
           <form action={startCheckout}>
             <Button type="submit" size="lg">
               {subscription?.mercadoPagoPreapprovalId ? 'Atualizar pagamento' : 'Iniciar cobrança'}

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createAppointmentInTransaction, AppointmentConflictError } from '@/lib/booking/validateAppointment';
 import { normalizeBrazilianWhatsapp, isValidBrazilianWhatsapp } from '@/lib/phone';
+import { isSubscriptionUsable } from '@/lib/billing/subscription-status';
 
 const bookingSchema = z.object({
   serviceId: z.string().min(1),
@@ -23,10 +24,14 @@ export async function POST(request: Request, { params }: { params: { slug: strin
 
   const tenant = await prisma.tenant.findUnique({
     where: { slug: params.slug },
-    select: { id: true, timezone: true },
+    select: { id: true, timezone: true, subscription: { select: { status: true, trialEndsAt: true } } },
   });
   if (!tenant) {
     return NextResponse.json({ error: 'Negocio nao encontrado.' }, { status: 404 });
+  }
+
+  if (!tenant.subscription || !isSubscriptionUsable(tenant.subscription)) {
+    return NextResponse.json({ error: 'Esse negocio nao esta com o agendamento online ativo.' }, { status: 403 });
   }
 
   const service = await prisma.service.findFirst({

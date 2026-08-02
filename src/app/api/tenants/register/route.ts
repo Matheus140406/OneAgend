@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { isValidSlug } from '@/lib/slug';
+import { computeTrialEndsAt } from '@/lib/billing/subscription-status';
 
 const registerSchema = z.object({
   tenantName: z.string().min(2).max(120),
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
         businessType,
         plan,
         subscription: {
-          create: { plan, status: 'TRIALING' },
+          create: { plan, status: 'TRIALING', trialEndsAt: computeTrialEndsAt() },
         },
       },
     });
