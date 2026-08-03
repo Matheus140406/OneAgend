@@ -36,6 +36,7 @@ function baseAppointment(overrides: Partial<ResolvedAppointment> = {}): Resolved
     professionalId: 'prof_1',
     serviceId: 'service_1',
     startsAt: new Date('2026-08-10T13:00:00Z'),
+    endsAt: new Date('2026-08-10T13:30:00Z'),
     status: 'PENDING',
     tenant: { timezone: 'America/Sao_Paulo', locale: 'PT_BR' },
     client: { id: 'client_1', name: 'Ana', whatsapp: '+5511999999999', whatsappOptOut: false },

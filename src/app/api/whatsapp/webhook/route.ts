@@ -4,11 +4,14 @@ import { verifyMetaSignature, verifyWebhookHandshake } from '@/lib/whatsapp/webh
 import { sendWhatsappTextMessage } from '@/lib/whatsapp/client';
 import {
   parseInboundIntent,
+  normalizeReply,
   resolveAppointmentForReply,
   handleConfirmReply,
   handleRescheduleReply,
   handleCancelReply,
 } from '@/lib/whatsapp/interactive';
+import { resolveActiveRescheduleOffer, parseSlotSelection, handleRescheduleSelection, saveRescheduleOffer } from '@/lib/whatsapp/reschedule-offer';
+import { resolveActiveWaitlistClaim, handleWaitlistClaimReply, CLAIM_KEYWORDS } from '@/lib/whatsapp/waitlist-claim';
 import { t } from '@/lib/i18n/messages';
 import { checkRateLimit, createPrismaRateLimitStore } from '@/lib/rate-limit';
 
@@ -112,6 +115,31 @@ async function processInboundMessage(message: MetaInboundMessage, phoneNumberId:
   const text = extractMessageText(message);
   if (!text) return;
 
+  const normalized = normalizeReply(text);
+
+  // 1) O cliente tem uma oferta de reagendamento em aberto (mandamos os 3
+  // horarios ha pouco)? Se sim, a proxima mensagem e a escolha da opcao, e
+  // NAO deve cair no menu confirmar/reagendar/cancelar de novo.
+  const rescheduleOffer = await resolveActiveRescheduleOffer(prisma, fromPhone);
+  if (rescheduleOffer) {
+    const chosenIndex = parseSlotSelection(normalized, rescheduleOffer.slotsOffered.length);
+    const reply =
+      chosenIndex === null
+        ? t(rescheduleOffer.appointment.tenant.locale, 'unrecognizedReply')
+        : await handleRescheduleSelection(prisma, rescheduleOffer, chosenIndex);
+    await sendWhatsappTextMessage({ to: rescheduleOffer.appointment.client.whatsapp, body: reply });
+    return;
+  }
+
+  // 2) O cliente tem uma vaga de fila de espera aberta pra reivindicar?
+  const waitlistClaim = await resolveActiveWaitlistClaim(prisma, fromPhone);
+  if (waitlistClaim && CLAIM_KEYWORDS.has(normalized)) {
+    const reply = await handleWaitlistClaimReply(prisma, waitlistClaim);
+    await sendWhatsappTextMessage({ to: waitlistClaim.client.whatsapp, body: reply });
+    return;
+  }
+
+  // 3) Fluxo normal: confirmar/reagendar/cancelar o proximo agendamento ativo.
   const appointment = await resolveAppointmentForReply(prisma, fromPhone, phoneNumberId);
   if (!appointment) return; // mensagem nao corresponde a nenhum agendamento ativo conhecido
 
@@ -125,7 +153,8 @@ async function processInboundMessage(message: MetaInboundMessage, phoneNumberId:
     }
     case 'RESCHEDULE': {
       const offer = await handleRescheduleReply(prisma, appointment);
-      await sendWhatsappTextMessage({ to: appointment.client.whatsapp, body: offer });
+      await saveRescheduleOffer(prisma, appointment.id, offer.slots);
+      await sendWhatsappTextMessage({ to: appointment.client.whatsapp, body: offer.message });
       return;
     }
     case 'CANCEL': {

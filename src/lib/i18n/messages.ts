@@ -17,7 +17,8 @@ type WhatsappMessageKey =
   | 'rescheduleOffer'
   | 'rescheduleNoSlots'
   | 'unrecognizedReply'
-  | 'waitlistSlotOpened';
+  | 'waitlistSlotOpened'
+  | 'waitlistAlreadyTaken';
 
 type MessageDictionary = Record<WhatsappMessageKey, string>;
 
@@ -30,6 +31,7 @@ const WHATSAPP_MESSAGES: Record<SupportedLocale, MessageDictionary> = {
     rescheduleNoSlots: 'No momento não há horários disponíveis nos próximos dias. Vamos avisar assim que abrir um novo horário.',
     unrecognizedReply: 'Não entendi sua resposta. Responda 1 para confirmar, 2 para reagendar ou 3 para cancelar.',
     waitlistSlotOpened: '{{name}}, uma vaga abriu para {{service}} no dia {{date}} às {{time}}. Responda SIM para garantir esse horário.',
+    waitlistAlreadyTaken: 'Poxa, {{name}}, essa vaga acabou de ser preenchida por outra pessoa. Você continua na fila para o próximo horário que abrir.',
   },
   PT_PT: {
     confirmAck: 'Está confirmado, {{name}}! A sua marcação de {{service}} no dia {{date}} às {{time}} foi confirmada.',
@@ -38,6 +40,7 @@ const WHATSAPP_MESSAGES: Record<SupportedLocale, MessageDictionary> = {
     rescheduleNoSlots: 'De momento não há horários disponíveis nos próximos dias. Avisaremos assim que surgir um novo horário.',
     unrecognizedReply: 'Não percebi a sua resposta. Responda 1 para confirmar, 2 para remarcar ou 3 para cancelar.',
     waitlistSlotOpened: '{{name}}, abriu uma vaga para {{service}} no dia {{date}} às {{time}}. Responda SIM para garantir este horário.',
+    waitlistAlreadyTaken: 'Ora, {{name}}, essa vaga acabou de ser preenchida por outra pessoa. Continua na fila para o próximo horário que surgir.',
   },
   EN: {
     confirmAck: 'All set, {{name}}! Your {{service}} appointment on {{date}} at {{time}} is confirmed.',
@@ -46,6 +49,7 @@ const WHATSAPP_MESSAGES: Record<SupportedLocale, MessageDictionary> = {
     rescheduleNoSlots: "There are no available times in the next few days right now. We'll let you know as soon as a new slot opens.",
     unrecognizedReply: "Sorry, we didn't understand. Reply 1 to confirm, 2 to reschedule, or 3 to cancel.",
     waitlistSlotOpened: '{{name}}, a spot opened up for {{service}} on {{date}} at {{time}}. Reply YES to claim it.',
+    waitlistAlreadyTaken: 'Sorry {{name}}, that spot was just taken by someone else. You are still on the waitlist for the next opening.',
   },
   ES: {
     confirmAck: '¡Listo, {{name}}! Tu cita de {{service}} el {{date}} a las {{time}} está confirmada.',
@@ -54,6 +58,7 @@ const WHATSAPP_MESSAGES: Record<SupportedLocale, MessageDictionary> = {
     rescheduleNoSlots: 'Por ahora no hay horarios disponibles en los próximos días. Te avisaremos en cuanto se abra un nuevo horario.',
     unrecognizedReply: 'No entendimos tu respuesta. Responde 1 para confirmar, 2 para reprogramar o 3 para cancelar.',
     waitlistSlotOpened: '{{name}}, ¡se liberó un horario para {{service}} el {{date}} a las {{time}}! Responde SÍ para reservarlo.',
+    waitlistAlreadyTaken: 'Uy {{name}}, ese horario ya fue reservado por otra persona. Sigues en la lista de espera para el próximo que se abra.',
   },
   FR: {
     confirmAck: "C'est confirmé, {{name}} ! Votre rendez-vous de {{service}} le {{date}} à {{time}} est confirmé.",
@@ -62,6 +67,7 @@ const WHATSAPP_MESSAGES: Record<SupportedLocale, MessageDictionary> = {
     rescheduleNoSlots: "Il n'y a pas de créneau disponible dans les prochains jours pour le moment. Nous vous préviendrons dès qu'un nouveau créneau s'ouvrira.",
     unrecognizedReply: "Nous n'avons pas compris votre réponse. Répondez 1 pour confirmer, 2 pour reporter ou 3 pour annuler.",
     waitlistSlotOpened: '{{name}}, un créneau s’est libéré pour {{service}} le {{date}} à {{time}}. Répondez OUI pour le réserver.',
+    waitlistAlreadyTaken: 'Désolé {{name}}, ce créneau vient d’être pris par quelqu’un d’autre. Vous restez sur la liste d’attente pour la prochaine ouverture.',
   },
 };
 

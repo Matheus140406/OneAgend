@@ -31,7 +31,7 @@ const CANCEL_KEYWORDS = new Set(['3', 'cancelar', 'cancel', 'annuler']);
 
 const COMBINING_DIACRITICS = new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g');
 
-function normalizeReply(raw: string): string {
+export function normalizeReply(raw: string): string {
   // NFD separa a letra base do acento (ex: "é" -> "e" + acento combinante),
   // depois removemos os acentos p/ casar variantes com/sem diacritico.
   return raw.trim().toLowerCase().normalize('NFD').replace(COMBINING_DIACRITICS, '');
@@ -53,6 +53,7 @@ export interface ResolvedAppointment {
   professionalId: string;
   serviceId: string;
   startsAt: Date;
+  endsAt: Date;
   status: string;
   tenant: { timezone: string; locale: SupportedLocale };
   client: { id: string; name: string; whatsapp: string; whatsappOptOut: boolean };
@@ -98,7 +99,7 @@ export async function resolveAppointmentForReply(
   return appointment as unknown as ResolvedAppointment | null;
 }
 
-function formatDateTimeLabel(date: Date, timezone: string, locale: SupportedLocale): { date: string; time: string } {
+export function formatDateTimeLabel(date: Date, timezone: string, locale: SupportedLocale): { date: string; time: string } {
   const intlLocale = { PT_BR: 'pt-BR', PT_PT: 'pt-PT', EN: 'en-US', ES: 'es-ES', FR: 'fr-FR' }[locale];
   const dateLabel = new Intl.DateTimeFormat(intlLocale, { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(date);
   const timeLabel = new Intl.DateTimeFormat(intlLocale, { timeZone: timezone, hour: '2-digit', minute: '2-digit' }).format(date);
@@ -115,11 +116,21 @@ export async function handleConfirmReply(prisma: PrismaClient, appointment: Reso
   return t(appointment.tenant.locale, 'confirmAck', { name: appointment.client.name, service: appointment.service.name, date, time });
 }
 
-const MAX_RESCHEDULE_SLOTS = 3;
+export const MAX_RESCHEDULE_SLOTS = 3;
 const MAX_RESCHEDULE_SEARCH_DAYS = 14;
 
-/** Busca ate 3 proximos horarios livres do mesmo profissional/servico e devolve a mensagem pronta para enviar. */
-export async function handleRescheduleReply(prisma: PrismaClient, appointment: ResolvedAppointment, now: Date = new Date()): Promise<string> {
+export interface RescheduleOfferMessage {
+  message: string;
+  /** Vazio quando nao ha horario livre — nesse caso nao ha oferta para persistir. */
+  slots: Date[];
+}
+
+/** Busca ate 3 proximos horarios livres do mesmo profissional/servico e monta a mensagem com as opcoes. */
+export async function handleRescheduleReply(
+  prisma: PrismaClient,
+  appointment: ResolvedAppointment,
+  now: Date = new Date(),
+): Promise<RescheduleOfferMessage> {
   const { timezone, locale } = appointment.tenant;
   const slots: Date[] = [];
   let dateKey = businessDateKey(now, timezone);
@@ -141,7 +152,7 @@ export async function handleRescheduleReply(prisma: PrismaClient, appointment: R
   }
 
   if (slots.length === 0) {
-    return t(locale, 'rescheduleNoSlots');
+    return { message: t(locale, 'rescheduleNoSlots'), slots: [] };
   }
 
   const slotsLabel = slots
@@ -151,10 +162,11 @@ export async function handleRescheduleReply(prisma: PrismaClient, appointment: R
     })
     .join('\n');
 
-  return t(locale, 'rescheduleOffer', { name: appointment.client.name, slots: slotsLabel });
+  return { message: t(locale, 'rescheduleOffer', { name: appointment.client.name, slots: slotsLabel }), slots };
 }
 
 const MAX_WAITLIST_NOTIFICATIONS = 5;
+export const WAITLIST_CLAIM_TTL_MINUTES = 60;
 
 export interface CancelReplyResult {
   ackMessage: string;
@@ -164,9 +176,12 @@ export interface CancelReplyResult {
 /**
  * Cancela o agendamento e dispara a "recuperacao de no-show": procura
  * clientes elegiveis na fila de espera para o mesmo servico/profissional
- * (e, se informado, o mesmo dia) e avisa que uma vaga abriu.
+ * (e, se informado, o mesmo dia) e avisa que uma vaga abriu. O horario exato
+ * fica gravado na entrada (offeredStartsAt/EndsAt) para o cliente poder
+ * reivindicar respondendo "SIM" (ver src/lib/whatsapp/waitlist-claim.ts) —
+ * e primeiro que responder leva, os demais recebem "vaga ja preenchida".
  */
-export async function handleCancelReply(prisma: PrismaClient, appointment: ResolvedAppointment): Promise<CancelReplyResult> {
+export async function handleCancelReply(prisma: PrismaClient, appointment: ResolvedAppointment, now: Date = new Date()): Promise<CancelReplyResult> {
   if (appointment.status !== 'CANCELED') {
     await prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'CANCELED' } });
   }
@@ -210,7 +225,16 @@ export async function handleCancelReply(prisma: PrismaClient, appointment: Resol
       const result = await sendWhatsappTextMessage({ to: entry.client.whatsapp, body: message });
       await prisma.waitlistEntry.update({
         where: { id: entry.id },
-        data: { status: result.success ? 'NOTIFIED' : 'WAITING', notifiedAt: result.success ? new Date() : undefined },
+        data: result.success
+          ? {
+              status: 'NOTIFIED',
+              notifiedAt: now,
+              offeredStartsAt: appointment.startsAt,
+              offeredEndsAt: appointment.endsAt,
+              offeredProfessionalId: appointment.professionalId,
+              offerExpiresAt: new Date(now.getTime() + WAITLIST_CLAIM_TTL_MINUTES * 60_000),
+            }
+          : {},
       });
       if (result.success) notified += 1;
     } catch (error) {

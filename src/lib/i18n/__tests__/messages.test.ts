@@ -8,7 +8,15 @@ describe('t', () => {
   });
 
   it('todos os 5 idiomas suportados tem as mesmas chaves de mensagem', () => {
-    const keys = ['confirmAck', 'cancelAck', 'rescheduleOffer', 'rescheduleNoSlots', 'unrecognizedReply', 'waitlistSlotOpened'] as const;
+    const keys = [
+      'confirmAck',
+      'cancelAck',
+      'rescheduleOffer',
+      'rescheduleNoSlots',
+      'unrecognizedReply',
+      'waitlistSlotOpened',
+      'waitlistAlreadyTaken',
+    ] as const;
     for (const locale of SUPPORTED_LOCALES) {
       for (const key of keys) {
         expect(t(locale, key, { name: 'x', service: 'y', date: 'z', time: 'w', slots: 's' })).not.toContain('{{');

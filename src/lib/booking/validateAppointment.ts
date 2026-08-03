@@ -175,3 +175,48 @@ export async function createAppointmentInTransaction(
     });
   });
 }
+
+export interface RescheduleAppointmentInput {
+  appointmentId: string;
+  professionalId: string;
+  startsAt: Date;
+  endsAt: Date;
+  timezone: string;
+}
+
+/**
+ * Move um agendamento existente para outro horario, revalidando a regra de
+ * negocio critica (excluindo o proprio agendamento da checagem de
+ * sobreposicao). Sempre usar isto em vez de `prisma.appointment.update`
+ * direto para mudar startsAt/endsAt.
+ *
+ * Reseta os campos de lembrete: eles controlam a idempotencia do cron para o
+ * horario ANTERIOR — sem resetar, o lembrete do novo horario nunca seria
+ * disparado (os campos ja estariam "preenchidos").
+ */
+export async function rescheduleAppointmentInTransaction(
+  prisma: PrismaClient,
+  input: RescheduleAppointmentInput,
+) {
+  return prisma.$transaction(async (tx) => {
+    await assertSlotIsAvailable(tx as unknown as BookingDataSource, {
+      professionalId: input.professionalId,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      timezone: input.timezone,
+      excludeAppointmentId: input.appointmentId,
+    });
+
+    return tx.appointment.update({
+      where: { id: input.appointmentId },
+      data: {
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        status: 'PENDING',
+        reminder24hSentAt: null,
+        reminder1hSentAt: null,
+      },
+      include: { service: true, professional: true, client: true },
+    });
+  });
+}

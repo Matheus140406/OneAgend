@@ -253,7 +253,17 @@ model WaitlistEntry {
   // "YYYY-MM-DD" opcional, no fuso do tenant — cliente so quer ser avisado se vagar nesse dia
   preferredDateKey String?
   status           WaitlistStatus @default(WAITING)
-  notifiedAt       DateTime?
+
+  // Preenchidos quando status vira NOTIFIED: o horario exato que vagou (do
+  // agendamento cancelado que disparou o aviso) e ate quando o cliente pode
+  // responder "SIM" para reivindicar. offeredProfessionalId e sempre
+  // preenchido nesse momento, mesmo que professionalId acima seja null
+  // (entrada generica "qualquer profissional").
+  offeredStartsAt       DateTime?
+  offeredEndsAt         DateTime?
+  offeredProfessionalId String?
+  offerExpiresAt        DateTime?
+  notifiedAt             DateTime?
   createdAt        DateTime       @default(now())
 
   @@index([tenantId, serviceId, professionalId, status])
@@ -287,6 +297,8 @@ model Appointment {
   reminder24hSentAt DateTime?
   reminder1hSentAt  DateTime?
 
+  rescheduleOffer RescheduleOffer?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -294,6 +306,20 @@ model Appointment {
   @@index([professionalId, startsAt, endsAt])
   @@index([tenantId, startsAt])
   @@index([clientId])
+}
+
+// Oferta ativa de reagendamento: registrada quando o bot manda os 3
+// horarios alternativos (resposta "2"), para que a PROXIMA mensagem do
+// cliente seja interpretada como "escolhi a opcao N" em vez de cair de novo
+// no menu confirmar/reagendar/cancelar. Expira sozinha (ver expiresAt);
+// apagada assim que o cliente escolhe um horario ou manda outra coisa.
+model RescheduleOffer {
+  id            String      @id @default(cuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  slotsOffered  DateTime[]
+  createdAt     DateTime    @default(now())
+  expiresAt     DateTime
 }
 
 // Contador de rate limiting por janela fixa (chave = "<rota>:<identificador>:<janela>").
