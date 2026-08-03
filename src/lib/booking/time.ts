@@ -64,6 +64,20 @@ export function addDaysToDateKey(dateKey: string, days: number): string {
   ).padStart(2, '0')}`;
 }
 
+/** Início (inclusivo) e fim (exclusivo) do mês corrente de `date`, no fuso do negócio. */
+export function getMonthRange(date: Date, timeZone: string): { start: Date; end: Date } {
+  const [year, month] = parseDateKey(businessDateKey(date, timeZone));
+  const firstOfMonthKey = `${year}-${String(month).padStart(2, '0')}-01`;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const firstOfNextMonthKey = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
+  return {
+    start: zonedWallTimeToUtc(firstOfMonthKey, '00:00', timeZone),
+    end: zonedWallTimeToUtc(firstOfNextMonthKey, '00:00', timeZone),
+  };
+}
+
 export function businessDateKey(date: Date, timeZone: string): string {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,

@@ -98,10 +98,16 @@ export default async function BillingPage({
                   )}
                 >
                   <span className="font-display text-sm font-semibold text-base-100">{PLAN_DETAILS[plan].label}</span>
-                  <span className="text-xs text-base-400">{PLAN_DETAILS[plan].description}</span>
                   <span className="text-xs font-medium text-accent">
                     {formatPriceFromCents(PLAN_DETAILS[plan].priceCents)}/mês
                   </span>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {PLAN_DETAILS[plan].features.map((feature) => (
+                      <li key={feature} className="text-xs text-base-400">
+                        · {feature}
+                      </li>
+                    ))}
+                  </ul>
                 </button>
               </form>
             ))}

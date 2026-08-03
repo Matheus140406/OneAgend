@@ -1,7 +1,13 @@
-import { AppointmentStatus, type PrismaClient } from '@prisma/client';
+import { AppointmentStatus, type Plan, type PrismaClient } from '@prisma/client';
 import { sendWhatsappTemplateMessage } from './client';
+import { PLAN_DETAILS } from '@/lib/plans';
 
 const ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
+
+// Lembrete automatico e um beneficio de plano — Basico nao recebe.
+const PLANS_WITH_WHATSAPP_REMINDERS: Plan[] = (Object.keys(PLAN_DETAILS) as Plan[]).filter(
+  (plan) => PLAN_DETAILS[plan].hasWhatsappReminders,
+);
 
 // Janelas de busca alinhadas ao disparo 24h/1h antes do horario, com
 // tolerancia suficiente para cobrir o intervalo entre execucoes do cron.
@@ -41,6 +47,7 @@ export async function dispatchDueReminders(
         status: { in: ACTIVE_STATUSES },
         startsAt: { gte: windowStart, lte: windowEnd },
         [config.sentAtField]: null,
+        tenant: { plan: { in: PLANS_WITH_WHATSAPP_REMINDERS } },
       },
       include: { client: true, service: true, professional: true },
     });

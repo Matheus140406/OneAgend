@@ -1,13 +1,19 @@
 import Link from 'next/link';
 import { requireCurrentUser } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { PLAN_DETAILS } from '@/lib/plans';
+import { countAppointmentsInMonth, evaluateAppointmentLimit } from '@/lib/billing/appointment-limit';
 import { Badge } from '@/components/ui/badge';
 import { SidebarNavLinks, MobileNavLinks } from '@/components/dashboard/nav-links';
 import { SignOutButton } from '@/components/dashboard/sign-out-button';
 import { TrialBanner } from '@/components/dashboard/trial-banner';
+import { AppointmentLimitBanner } from '@/components/dashboard/appointment-limit-banner';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireCurrentUser();
+
+  const usedThisMonth = await countAppointmentsInMonth(prisma, user.tenantId, user.tenant.timezone, new Date());
+  const appointmentLimitCheck = evaluateAppointmentLimit(usedThisMonth, user.tenant.plan);
 
   return (
     <div className="flex min-h-screen bg-base-950">
@@ -36,6 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </header>
 
         <TrialBanner subscription={user.tenant.subscription} />
+        <AppointmentLimitBanner check={appointmentLimitCheck} />
 
         <main className="flex-1 px-4 py-6 md:px-6">{children}</main>
       </div>

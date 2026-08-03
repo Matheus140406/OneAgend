@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createAppointmentInTransaction, AppointmentConflictError } from '@/lib/booking/validateAppointment';
 import { normalizeBrazilianWhatsapp, isValidBrazilianWhatsapp } from '@/lib/phone';
 import { isSubscriptionUsable } from '@/lib/billing/subscription-status';
+import { countAppointmentsInMonth, evaluateAppointmentLimit } from '@/lib/billing/appointment-limit';
 import { checkRateLimit, createPrismaRateLimitStore, getClientIp } from '@/lib/rate-limit';
 
 const bookingSchema = z.object({
@@ -37,7 +38,12 @@ export async function POST(request: Request, { params }: { params: { slug: strin
   try {
     const tenant = await prisma.tenant.findUnique({
       where: { slug: params.slug },
-      select: { id: true, timezone: true, subscription: { select: { status: true, trialEndsAt: true } } },
+      select: {
+        id: true,
+        timezone: true,
+        plan: true,
+        subscription: { select: { status: true, trialEndsAt: true } },
+      },
     });
     if (!tenant) {
       return NextResponse.json({ error: 'Negocio nao encontrado.' }, { status: 404 });
@@ -57,6 +63,17 @@ export async function POST(request: Request, { params }: { params: { slug: strin
 
     const start = new Date(startsAt);
     const end = new Date(start.getTime() + service.durationMinutes * 60_000);
+
+    // Checagem de capacidade do plano (nao transacional — e um teto de uso/custo,
+    // nao uma invariante de negocio como o conflito de horario, entao uma pequena
+    // margem de corrida em picos simultaneos e aceitavel).
+    const usedInTargetMonth = await countAppointmentsInMonth(prisma, tenant.id, tenant.timezone, start);
+    if (!evaluateAppointmentLimit(usedInTargetMonth, tenant.plan).allowed) {
+      return NextResponse.json(
+        { error: 'Esse negocio atingiu o limite de agendamentos para esse mes.' },
+        { status: 403 },
+      );
+    }
 
     const candidateProfessionalIds =
       professionalId === 'any'
