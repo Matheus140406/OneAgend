@@ -27,7 +27,9 @@ enum SubscriptionStatus {
 
 enum UserRole {
   OWNER
-  PROFESSIONAL
+  ADMIN
+  STAFF
+  CUSTOM
 }
 
 enum AppointmentStatus {
@@ -38,6 +40,36 @@ enum AppointmentStatus {
   DONE
 }
 
+// Nicho do tenant, usado para escolher o texto padrao das mensagens de
+// WhatsApp (lembrete/confirmacao) sem exigir que o dono escreva do zero.
+enum NicheType {
+  BEAUTY_SALON
+  HEALTH_CLINIC
+  BARBERSHOP
+  PETSHOP
+  PERSONAL_TRAINER
+  TATTOO_STUDIO
+  THERAPY_CONSULTING
+  SPORTS_COURT
+}
+
+// Idioma usado nas mensagens automaticas (WhatsApp) enviadas pelo tenant.
+// Nao controla o idioma do painel (UI), so o conteudo dos templates.
+enum Locale {
+  PT_BR
+  PT_PT
+  EN
+  ES
+  FR
+}
+
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  BOOKED
+  EXPIRED
+}
+
 model Tenant {
   id           String   @id @default(cuid())
   name         String
@@ -46,6 +78,19 @@ model Tenant {
   plan         Plan     @default(BASICO)
   // timezone IANA usado para calcular expediente/folgas (ex: America/Sao_Paulo)
   timezone     String   @default("America/Sao_Paulo")
+
+  // Nicho estruturado (alem do businessType livre) usado para escolher o
+  // template padrao de mensagem de WhatsApp. Idioma dessas mensagens.
+  niche NicheType @default(BARBERSHOP)
+  locale Locale   @default(PT_BR)
+  // phone_number_id da WhatsApp Cloud API deste tenant, se ele tiver o
+  // proprio numero (embedded signup). Null = usa o numero da plataforma
+  // (env WHATSAPP_CLOUD_API_PHONE_NUMBER_ID), compartilhado entre tenants.
+  whatsappPhone    String?
+  // Override do texto de mensagem escolhido pelo dono; se null, usa o
+  // template padrao do niche (ver src/lib/whatsapp/niche-templates.ts).
+  whatsappTemplate String?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -55,8 +100,10 @@ model Tenant {
   services      Service[]
   clients       Client[]
   appointments  Appointment[]
+  waitlistEntries WaitlistEntry[]
 
   @@index([slug])
+  @@index([whatsappPhone])
 }
 
 model Subscription {
@@ -84,7 +131,19 @@ model User {
   role           UserRole      @default(OWNER)
   professionalId String?       @unique
   professional   Professional? @relation(fields: [professionalId], references: [id])
+
+  // Permissoes granulares (checadas por src/lib/auth/rbac.ts). Role=OWNER
+  // ignora essas flags (bypass total). Para os demais papeis, cada acao
+  // sensivel exige a flag correspondente — CUSTOM depende inteiramente
+  // delas, ADMIN/STAFF podem ter defaults diferentes na criacao do usuario.
+  canViewFinancial     Boolean @default(false)
+  canManageScheduleAll Boolean @default(false)
+  canManageClients     Boolean @default(true)
+  canManageSettings    Boolean @default(false)
+  canTriggerBroadcast  Boolean @default(false)
+
   createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([tenantId])
 }
@@ -102,6 +161,7 @@ model Professional {
   timeOffs     TimeOff[]
   services     ServiceOnProfessional[]
   appointments Appointment[]
+  waitlistEntries WaitlistEntry[]
 
   @@index([tenantId])
 }
@@ -143,6 +203,7 @@ model Service {
 
   professionals ServiceOnProfessional[]
   appointments  Appointment[]
+  waitlistEntries WaitlistEntry[]
 
   @@index([tenantId])
 }
@@ -164,12 +225,48 @@ model Client {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name      String
   whatsapp  String // formato E.164, ex: +5511999999999
+  // Cliente pediu para nao receber mensagens automaticas (broadcast/waitlist).
+  // Lembretes de agendamento continuam valendo (nao sao marketing).
+  whatsappOptOut Boolean @default(false)
   createdAt DateTime @default(now())
 
-  appointments Appointment[]
+  appointments   Appointment[]
+  waitlistEntries WaitlistEntry[]
 
   @@unique([tenantId, whatsapp])
   @@index([tenantId])
+}
+
+// Fila de espera para um servico (opcionalmente com profissional/data
+// preferidos). Usada pela recuperacao de no-show: quando um agendamento e
+// cancelado, avisamos os clientes elegiveis de que uma vaga abriu.
+model WaitlistEntry {
+  id               String         @id @default(cuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId         String
+  client           Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  serviceId        String
+  service          Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  professionalId   String?
+  professional     Professional?  @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  // "YYYY-MM-DD" opcional, no fuso do tenant — cliente so quer ser avisado se vagar nesse dia
+  preferredDateKey String?
+  status           WaitlistStatus @default(WAITING)
+  notifiedAt       DateTime?
+  createdAt        DateTime       @default(now())
+
+  @@index([tenantId, serviceId, professionalId, status])
+  @@index([clientId])
+}
+
+// Deduplica mensagens recebidas via webhook do WhatsApp (o id "wamid.*" da
+// Meta e globalmente unico). A Graph API reenvia webhooks quando nao recebe
+// 200 a tempo, entao sem isso um "2" (reagendar) processado duas vezes
+// poderia, por exemplo, disparar a recuperacao de no-show em duplicidade.
+model WhatsappInboundMessage {
+  id          String   @id // wamid.* da Meta
+  processedAt DateTime @default(now())
 }
 
 model Appointment {

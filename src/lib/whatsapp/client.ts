@@ -102,3 +102,60 @@ function safeParseJson<T>(text: string): T | null {
     return null;
   }
 }
+
+export interface SendWhatsappTextParams {
+  to: string;
+  body: string;
+}
+
+/**
+ * Mensagem de texto livre (sem template), permitida pela Meta dentro da
+ * "janela de atendimento ao cliente" de 24h apos a ultima mensagem recebida
+ * do usuario — e exatamente o caso do bot interativo, que so responde depois
+ * de o cliente ter mandado uma mensagem. Fora dessa janela a Graph API
+ * rejeita o envio; quem chama deve tratar success=false normalmente.
+ */
+export async function sendWhatsappTextMessage(params: SendWhatsappTextParams): Promise<SendWhatsappResult> {
+  const token = process.env.WHATSAPP_CLOUD_API_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
+  const apiVersion = process.env.WHATSAPP_CLOUD_API_VERSION ?? 'v20.0';
+
+  if (!token || !phoneNumberId) {
+    return { success: false, error: 'WhatsApp Cloud API nao esta configurada.' };
+  }
+
+  const cleanPhone = params.to.replace(/\D/g, '');
+  if (!cleanPhone) {
+    return { success: false, error: 'Numero de destino invalido.' };
+  }
+
+  const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+
+  try {
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: cleanPhone,
+        type: 'text',
+        text: { body: params.body },
+      }),
+    });
+
+    if (!response.ok) {
+      const rawBody = await response.text().catch(() => '');
+      const parsed = safeParseJson<MetaErrorResponse>(rawBody);
+      const message = parsed?.error?.message ?? rawBody;
+      return { success: false, error: `WhatsApp API respondeu ${response.status}: ${message}` };
+    }
+
+    const data = (await response.json()) as { messages?: { id: string }[] };
+    return { success: true, providerMessageId: data.messages?.[0]?.id };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Falha de rede desconhecida.' };
+  }
+}

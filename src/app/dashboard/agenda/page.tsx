@@ -19,7 +19,7 @@ export default async function WeeklyAgendaPage({
   const timezone = user.tenant.timezone;
   const weekOffset = Number(searchParams.week ?? 0) || 0;
   const professionalFilter =
-    user.role === 'PROFESSIONAL' ? user.professionalId ?? undefined : searchParams.professionalId;
+    user.role === 'STAFF' ? user.professionalId ?? undefined : searchParams.professionalId;
 
   const todayKey = businessDateKey(new Date(), timezone);
   const todayWeekday = getBusinessMoment(zonedWallTimeToUtc(todayKey, '12:00', timezone), timezone).weekday;

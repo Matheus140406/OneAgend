@@ -19,7 +19,7 @@ export default async function DashboardHomePage() {
     where: {
       tenantId: user.tenantId,
       startsAt: { gte: dayStart, lt: dayEnd },
-      ...(user.role === 'PROFESSIONAL' ? { professionalId: user.professionalId ?? undefined } : {}),
+      ...(user.role === 'STAFF' ? { professionalId: user.professionalId ?? undefined } : {}),
     },
     orderBy: { startsAt: 'asc' },
     include: { client: true, service: true, professional: true },

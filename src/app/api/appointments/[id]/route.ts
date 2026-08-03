@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json({ error: 'Agendamento nao encontrado.' }, { status: 404 });
   }
 
-  if (user.role === 'PROFESSIONAL' && appointment.professionalId !== user.professionalId) {
+  if (user.role === 'STAFF' && appointment.professionalId !== user.professionalId) {
     return NextResponse.json({ error: 'Sem permissao para alterar esse agendamento.' }, { status: 403 });
   }
 
