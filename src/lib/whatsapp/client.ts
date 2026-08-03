@@ -7,7 +7,7 @@
 import { fetchWithRetry } from '@/lib/http/fetch-with-retry';
 
 export interface SendWhatsappTemplateParams {
-  to: string; // E.164, ex: +5511999999999
+  to: string; // aceita E.164 ou formatado, ex: +55 (11) 99999-9999
   templateName: string;
   languageCode?: string;
   bodyParameters: string[];
@@ -17,6 +17,15 @@ export interface SendWhatsappResult {
   success: boolean;
   providerMessageId?: string;
   error?: string;
+}
+
+interface TemplateComponent {
+  type: 'body';
+  parameters: { type: 'text'; text: string }[];
+}
+
+interface MetaErrorResponse {
+  error?: { message?: string };
 }
 
 /**
@@ -36,6 +45,21 @@ export async function sendWhatsappTemplateMessage(
     return { success: false, error: 'WhatsApp Cloud API nao esta configurada.' };
   }
 
+  // Remove tudo que nao for digito (espacos, parenteses, hifen, "+"), nao so o "+" —
+  // aceita numeros formatados em vez de exigir E.164 estrito do chamador.
+  const cleanPhone = params.to.replace(/\D/g, '');
+  if (!cleanPhone) {
+    return { success: false, error: 'Numero de destino invalido.' };
+  }
+
+  // Alguns templates nao tem variaveis; enviar `parameters: []` nesse caso e
+  // rejeitado pela Graph API em certas versoes/templates, entao so incluimos
+  // o componente "body" quando ha parametros de verdade.
+  const components: TemplateComponent[] =
+    params.bodyParameters.length > 0
+      ? [{ type: 'body', parameters: params.bodyParameters.map((text) => ({ type: 'text', text })) }]
+      : [];
+
   const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
 
   try {
@@ -47,29 +71,34 @@ export async function sendWhatsappTemplateMessage(
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
-        to: params.to.replace('+', ''),
+        to: cleanPhone,
         type: 'template',
         template: {
           name: params.templateName,
           language: { code: params.languageCode ?? 'pt_BR' },
-          components: [
-            {
-              type: 'body',
-              parameters: params.bodyParameters.map((text) => ({ type: 'text', text })),
-            },
-          ],
+          ...(components.length > 0 ? { components } : {}),
         },
       }),
     });
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      return { success: false, error: `WhatsApp API respondeu ${response.status}: ${body}` };
+      const rawBody = await response.text().catch(() => '');
+      const parsed = safeParseJson<MetaErrorResponse>(rawBody);
+      const message = parsed?.error?.message ?? rawBody;
+      return { success: false, error: `WhatsApp API respondeu ${response.status}: ${message}` };
     }
 
     const data = (await response.json()) as { messages?: { id: string }[] };
     return { success: true, providerMessageId: data.messages?.[0]?.id };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Falha de rede desconhecida.' };
+  }
+}
+
+function safeParseJson<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
   }
 }
