@@ -3,6 +3,7 @@ import { getAvailableSlotsForProfessional } from '@/lib/booking/availability';
 import { addDaysToDateKey, businessDateKey } from '@/lib/booking/time';
 import { t, type SupportedLocale } from '@/lib/i18n/messages';
 import { sendWhatsappTextMessage } from './client';
+import { logWhatsappMessage } from './message-log';
 
 /**
  * Bot interativo de resposta simples (1/2/3) do lembrete de WhatsApp.
@@ -223,6 +224,14 @@ export async function handleCancelReply(prisma: PrismaClient, appointment: Resol
       });
 
       const result = await sendWhatsappTextMessage({ to: entry.client.whatsapp, body: message });
+      if (result.success) {
+        await logWhatsappMessage(prisma, {
+          tenantId: appointment.tenantId,
+          clientId: entry.client.id,
+          direction: 'OUT',
+          body: message,
+        });
+      }
       await prisma.waitlistEntry.update({
         where: { id: entry.id },
         data: result.success

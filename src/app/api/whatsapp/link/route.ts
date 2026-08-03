@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { checkPermission } from '@/lib/auth/rbac';
-import { buildNicheDefaultTemplate, buildBookingLink } from '@/lib/whatsapp/niche-templates';
+import { updateTenantWhatsappConfig } from '@/lib/whatsapp/update-tenant-config';
 import { SUPPORTED_LOCALES } from '@/lib/i18n/messages';
 import { checkRateLimit, createPrismaRateLimitStore, getClientIp } from '@/lib/rate-limit';
 
@@ -66,37 +66,15 @@ export async function POST(request: Request) {
   try {
     // tenantId sempre vem da sessao autenticada — nunca do corpo da requisicao,
     // para nao permitir que um usuario altere a configuracao de outro tenant.
-    const currentTenant = await prisma.tenant.findUniqueOrThrow({
-      where: { id: user.tenantId },
-      select: { slug: true, niche: true, locale: true },
+    const updated = await updateTenantWhatsappConfig(prisma, user.tenantId, {
+      niche,
+      locale: locale as (typeof SUPPORTED_LOCALES)[number] | undefined,
+      whatsappPhone,
+      whatsappTemplate,
+      useDefaultTemplate,
     });
 
-    const resolvedNiche = niche ?? currentTenant.niche;
-    const resolvedLocale = (locale as (typeof SUPPORTED_LOCALES)[number] | undefined) ?? currentTenant.locale;
-
-    const shouldUseDefault = useDefaultTemplate ?? !whatsappTemplate;
-    const resolvedTemplate = shouldUseDefault
-      ? buildNicheDefaultTemplate(resolvedNiche, resolvedLocale, currentTenant.slug)
-      : (whatsappTemplate as string);
-
-    const updated = await prisma.tenant.update({
-      where: { id: user.tenantId },
-      data: {
-        niche: resolvedNiche,
-        locale: resolvedLocale,
-        whatsappPhone: whatsappPhone === undefined ? undefined : whatsappPhone || null,
-        whatsappTemplate: resolvedTemplate,
-      },
-      select: { niche: true, locale: true, whatsappPhone: true, whatsappTemplate: true, slug: true },
-    });
-
-    return NextResponse.json({
-      niche: updated.niche,
-      locale: updated.locale,
-      whatsappPhone: updated.whatsappPhone,
-      whatsappTemplate: updated.whatsappTemplate,
-      bookingLink: buildBookingLink(updated.slug),
-    });
+    return NextResponse.json(updated);
   } catch (error) {
     console.error('Falha ao salvar configuracao de WhatsApp:', error);
     return NextResponse.json({ error: 'Erro interno ao salvar a configuracao.' }, { status: 500 });

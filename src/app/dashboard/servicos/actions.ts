@@ -19,6 +19,7 @@ export async function createService(formData: FormData) {
   }
 
   const name = String(formData.get('name') ?? '').trim();
+  const category = String(formData.get('category') ?? '').trim() || null;
   const durationMinutes = Number(formData.get('durationMinutes'));
   const priceCents = parsePriceToCents(String(formData.get('price') ?? ''));
 
@@ -27,7 +28,7 @@ export async function createService(formData: FormData) {
   }
 
   await prisma.service.create({
-    data: { tenantId: user.tenantId, name, durationMinutes, priceCents: priceCents! },
+    data: { tenantId: user.tenantId, name, category, durationMinutes, priceCents: priceCents! },
   });
 
   revalidatePath('/dashboard/servicos');
@@ -41,6 +42,7 @@ export async function updateService(formData: FormData) {
   if (!service || service.tenantId !== user.tenantId) return;
 
   const name = String(formData.get('name') ?? '').trim();
+  const category = String(formData.get('category') ?? '').trim() || null;
   const durationMinutes = Number(formData.get('durationMinutes'));
   const priceCents = parsePriceToCents(String(formData.get('price') ?? ''));
 
@@ -50,7 +52,7 @@ export async function updateService(formData: FormData) {
 
   await prisma.service.update({
     where: { id: serviceId },
-    data: { name, durationMinutes, priceCents: priceCents! },
+    data: { name, category, durationMinutes, priceCents: priceCents! },
   });
 
   revalidatePath('/dashboard/servicos');

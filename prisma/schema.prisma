@@ -101,6 +101,7 @@ model Tenant {
   clients       Client[]
   appointments  Appointment[]
   waitlistEntries WaitlistEntry[]
+  whatsappMessages WhatsappMessage[]
 
   @@index([slug])
   @@index([whatsappPhone])
@@ -196,6 +197,9 @@ model Service {
   tenantId        String
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name            String
+  // Categoria livre digitada pelo dono (ex: "Cabelo", "Barba"), usada so
+  // para agrupar/filtrar a lista de servicos no painel. Null = "Outros".
+  category        String?
   durationMinutes Int
   priceCents      Int
   active          Boolean  @default(true)
@@ -232,6 +236,7 @@ model Client {
 
   appointments   Appointment[]
   waitlistEntries WaitlistEntry[]
+  whatsappMessages WhatsappMessage[]
 
   @@unique([tenantId, whatsapp])
   @@index([tenantId])
@@ -277,6 +282,28 @@ model WaitlistEntry {
 model WhatsappInboundMessage {
   id          String   @id // wamid.* da Meta
   processedAt DateTime @default(now())
+}
+
+enum WhatsappMessageDirection {
+  IN
+  OUT
+}
+
+// Historico de mensagens de WhatsApp (lembrete, respostas do bot, mensagem
+// manual do painel) usado pela tela de Mensagens. Guardado por Client, nao
+// por Appointment, porque uma conversa cobre varios agendamentos ao longo
+// do tempo.
+model WhatsappMessage {
+  id        String                    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client                    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  direction WhatsappMessageDirection
+  body      String
+  createdAt DateTime                  @default(now())
+
+  @@index([tenantId, clientId, createdAt])
 }
 
 model Appointment {

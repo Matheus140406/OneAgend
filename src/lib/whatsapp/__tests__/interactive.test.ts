@@ -92,6 +92,7 @@ describe('handleCancelReply', () => {
     const prisma = {
       appointment: { update: appointmentUpdate },
       waitlistEntry: { findMany: waitlistFindMany, update: waitlistUpdate },
+      whatsappMessage: { create: vi.fn().mockResolvedValue({}) },
     } as unknown as PrismaClient;
 
     const result = await handleCancelReply(prisma, baseAppointment());

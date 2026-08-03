@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
@@ -5,18 +6,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { cn, formatPriceFromCents } from '@/lib/utils';
+import { buildBookingLink } from '@/lib/whatsapp/niche-templates';
 import { createService, updateService, toggleServiceActive } from './actions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ServicesPage({ searchParams }: { searchParams: { error?: string } }) {
+const UNCATEGORIZED = 'Outros';
+
+export default async function ServicesPage({ searchParams }: { searchParams: { error?: string; category?: string } }) {
   const user = await requireCurrentUser();
   const isOwner = user.role === 'OWNER';
 
-  const services = await prisma.service.findMany({
-    where: { tenantId: user.tenantId },
-    orderBy: { createdAt: 'asc' },
-  });
+  const [services, tenant] = await Promise.all([
+    prisma.service.findMany({ where: { tenantId: user.tenantId }, orderBy: { createdAt: 'asc' } }),
+    prisma.tenant.findUniqueOrThrow({ where: { id: user.tenantId }, select: { slug: true } }),
+  ]);
+
+  const categories = Array.from(new Set(services.map((s) => s.category?.trim() || UNCATEGORIZED))).sort();
+  const activeCategory = searchParams.category && categories.includes(searchParams.category) ? searchParams.category : null;
+  const visibleServices = activeCategory
+    ? services.filter((s) => (s.category?.trim() || UNCATEGORIZED) === activeCategory)
+    : services;
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -28,15 +39,41 @@ export default async function ServicesPage({ searchParams }: { searchParams: { e
         </p>
       )}
 
+      {categories.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          <Link
+            href="/dashboard/servicos"
+            className={cn(
+              'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium',
+              !activeCategory ? 'border-accent bg-accent/10 text-accent' : 'border-base-800 text-base-300',
+            )}
+          >
+            Todos
+          </Link>
+          {categories.map((category) => (
+            <Link
+              key={category}
+              href={`/dashboard/servicos?category=${encodeURIComponent(category)}`}
+              className={cn(
+                'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium',
+                activeCategory === category ? 'border-accent bg-accent/10 text-accent' : 'border-base-800 text-base-300',
+              )}
+            >
+              {category}
+            </Link>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-col gap-3">
-        {services.length === 0 && (
+        {visibleServices.length === 0 && (
           <Card>
             <CardContent className="p-6 text-center text-sm text-base-500">
               Nenhum serviço cadastrado ainda.
             </CardContent>
           </Card>
         )}
-        {services.map((service) => (
+        {visibleServices.map((service) => (
           <Card key={service.id}>
             <CardContent>
               <form action={updateService} className="flex flex-wrap items-end gap-3">
@@ -44,6 +81,16 @@ export default async function ServicesPage({ searchParams }: { searchParams: { e
                 <div className="min-w-[10rem] flex-1">
                   <Label htmlFor={`name-${service.id}`}>Nome</Label>
                   <Input id={`name-${service.id}`} name="name" defaultValue={service.name} disabled={!isOwner} />
+                </div>
+                <div className="w-32">
+                  <Label htmlFor={`category-${service.id}`}>Categoria</Label>
+                  <Input
+                    id={`category-${service.id}`}
+                    name="category"
+                    defaultValue={service.category ?? ''}
+                    placeholder="Ex: Cabelo"
+                    disabled={!isOwner}
+                  />
                 </div>
                 <div className="w-28">
                   <Label htmlFor={`duration-${service.id}`}>Duração (min)</Label>
@@ -73,6 +120,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: { e
                     </Button>
                   </div>
                 )}
+                <span className="text-sm font-medium text-accent">{formatPriceFromCents(service.priceCents)}</span>
                 <Badge variant={service.active ? 'accent' : 'neutral'}>
                   {service.active ? 'Ativo' : 'Inativo'}
                 </Badge>
@@ -100,6 +148,10 @@ export default async function ServicesPage({ searchParams }: { searchParams: { e
                 <Label htmlFor="name">Nome</Label>
                 <Input id="name" name="name" required placeholder="Ex: Corte de cabelo" />
               </div>
+              <div className="w-32">
+                <Label htmlFor="category">Categoria</Label>
+                <Input id="category" name="category" placeholder="Ex: Cabelo" />
+              </div>
               <div className="w-28">
                 <Label htmlFor="durationMinutes">Duração (min)</Label>
                 <Input id="durationMinutes" name="durationMinutes" type="number" min={5} step={5} required defaultValue={30} />
@@ -113,6 +165,11 @@ export default async function ServicesPage({ searchParams }: { searchParams: { e
           </CardContent>
         </Card>
       )}
+
+      <p className="text-xs text-base-500">
+        Link público da sua agenda:{' '}
+        <span className="font-mono text-base-400">{buildBookingLink(tenant.slug)}</span>
+      </p>
     </div>
   );
 }

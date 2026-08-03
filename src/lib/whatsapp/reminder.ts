@@ -1,5 +1,6 @@
 import { AppointmentStatus, type Plan, type PrismaClient } from '@prisma/client';
 import { sendWhatsappTemplateMessage } from './client';
+import { logWhatsappMessage } from './message-log';
 import { PLAN_DETAILS } from '@/lib/plans';
 
 const ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
@@ -78,6 +79,12 @@ export async function dispatchDueReminders(
           await prisma.appointment.update({
             where: { id: appointment.id },
             data: { [config.sentAtField]: now },
+          });
+          await logWhatsappMessage(prisma, {
+            tenantId: appointment.tenantId,
+            clientId: appointment.clientId,
+            direction: 'OUT',
+            body: `[Lembrete ${config.kind}] ${appointment.client.name}, ${appointment.service.name} às ${timeLabel}.`,
           });
         } else {
           failed += 1;

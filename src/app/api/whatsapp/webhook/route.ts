@@ -12,6 +12,7 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { resolveActiveRescheduleOffer, parseSlotSelection, handleRescheduleSelection, saveRescheduleOffer } from '@/lib/whatsapp/reschedule-offer';
 import { resolveActiveWaitlistClaim, handleWaitlistClaimReply, CLAIM_KEYWORDS } from '@/lib/whatsapp/waitlist-claim';
+import { logWhatsappMessage } from '@/lib/whatsapp/message-log';
 import { t } from '@/lib/i18n/messages';
 import { checkRateLimit, createPrismaRateLimitStore } from '@/lib/rate-limit';
 
@@ -122,20 +123,25 @@ async function processInboundMessage(message: MetaInboundMessage, phoneNumberId:
   // NAO deve cair no menu confirmar/reagendar/cancelar de novo.
   const rescheduleOffer = await resolveActiveRescheduleOffer(prisma, fromPhone);
   if (rescheduleOffer) {
+    const { tenantId, client } = rescheduleOffer.appointment;
+    await logWhatsappMessage(prisma, { tenantId, clientId: client.id, direction: 'IN', body: text });
+
     const chosenIndex = parseSlotSelection(normalized, rescheduleOffer.slotsOffered.length);
     const reply =
       chosenIndex === null
         ? t(rescheduleOffer.appointment.tenant.locale, 'unrecognizedReply')
         : await handleRescheduleSelection(prisma, rescheduleOffer, chosenIndex);
-    await sendWhatsappTextMessage({ to: rescheduleOffer.appointment.client.whatsapp, body: reply });
+    await sendAndLog(tenantId, client.id, client.whatsapp, reply);
     return;
   }
 
   // 2) O cliente tem uma vaga de fila de espera aberta pra reivindicar?
   const waitlistClaim = await resolveActiveWaitlistClaim(prisma, fromPhone);
   if (waitlistClaim && CLAIM_KEYWORDS.has(normalized)) {
+    await logWhatsappMessage(prisma, { tenantId: waitlistClaim.tenantId, clientId: waitlistClaim.clientId, direction: 'IN', body: text });
+
     const reply = await handleWaitlistClaimReply(prisma, waitlistClaim);
-    await sendWhatsappTextMessage({ to: waitlistClaim.client.whatsapp, body: reply });
+    await sendAndLog(waitlistClaim.tenantId, waitlistClaim.clientId, waitlistClaim.client.whatsapp, reply);
     return;
   }
 
@@ -143,31 +149,39 @@ async function processInboundMessage(message: MetaInboundMessage, phoneNumberId:
   const appointment = await resolveAppointmentForReply(prisma, fromPhone, phoneNumberId);
   if (!appointment) return; // mensagem nao corresponde a nenhum agendamento ativo conhecido
 
+  const { tenantId, client } = appointment;
+  await logWhatsappMessage(prisma, { tenantId, clientId: client.id, direction: 'IN', body: text });
+
   const intent = parseInboundIntent(text);
 
   switch (intent) {
     case 'CONFIRM': {
       const ack = await handleConfirmReply(prisma, appointment);
-      await sendWhatsappTextMessage({ to: appointment.client.whatsapp, body: ack });
+      await sendAndLog(tenantId, client.id, client.whatsapp, ack);
       return;
     }
     case 'RESCHEDULE': {
       const offer = await handleRescheduleReply(prisma, appointment);
       await saveRescheduleOffer(prisma, appointment.id, offer.slots);
-      await sendWhatsappTextMessage({ to: appointment.client.whatsapp, body: offer.message });
+      await sendAndLog(tenantId, client.id, client.whatsapp, offer.message);
       return;
     }
     case 'CANCEL': {
       const { ackMessage } = await handleCancelReply(prisma, appointment);
-      await sendWhatsappTextMessage({ to: appointment.client.whatsapp, body: ackMessage });
+      await sendAndLog(tenantId, client.id, client.whatsapp, ackMessage);
       return;
     }
     default: {
-      await sendWhatsappTextMessage({
-        to: appointment.client.whatsapp,
-        body: t(appointment.tenant.locale, 'unrecognizedReply'),
-      });
+      await sendAndLog(tenantId, client.id, client.whatsapp, t(appointment.tenant.locale, 'unrecognizedReply'));
     }
+  }
+}
+
+/** Envia a resposta do bot e grava no historico da conversa (so se o envio deu certo). */
+async function sendAndLog(tenantId: string, clientId: string, to: string, body: string): Promise<void> {
+  const result = await sendWhatsappTextMessage({ to, body });
+  if (result.success) {
+    await logWhatsappMessage(prisma, { tenantId, clientId, direction: 'OUT', body });
   }
 }
 

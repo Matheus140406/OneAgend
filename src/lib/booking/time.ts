@@ -78,6 +78,28 @@ export function getMonthRange(date: Date, timeZone: string): { start: Date; end:
   };
 }
 
+/** "YYYY-MM" do mes corrente de `date`, no fuso do negocio. */
+export function businessMonthKey(date: Date, timeZone: string): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit' });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  return `${year}-${month}`;
+}
+
+/** Os `count` "YYYY-MM" mais recentes terminando no mes de `date` (no fuso do negocio), do mais antigo ao mais novo. */
+export function recentMonthKeys(date: Date, timeZone: string, count: number): string[] {
+  const [currentYear, currentMonth] = businessMonthKey(date, timeZone).split('-').map(Number) as [number, number];
+  const keys: string[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const totalMonths = currentYear * 12 + (currentMonth - 1) - i;
+    const year = Math.floor(totalMonths / 12);
+    const month = (totalMonths % 12) + 1;
+    keys.push(`${year}-${String(month).padStart(2, '0')}`);
+  }
+  return keys;
+}
+
 export function businessDateKey(date: Date, timeZone: string): string {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,
