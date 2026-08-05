@@ -7,8 +7,8 @@ const config: Config = {
     extend: {
       colors: {
         base: {
-          950: '#0a0a0c',
-          900: '#121215',
+          950: '#080a0f',
+          900: '#0f1117',
           800: '#1a1a1f',
           700: '#242429',
           600: '#33333a',
@@ -18,11 +18,14 @@ const config: Config = {
           200: '#cfcfd6',
           100: '#eeeef1',
         },
+        // Definido via CSS custom properties (default = verde da marca) para
+        // que o painel e a agenda publica possam trocar o accent por nicho
+        // em runtime (ver src/lib/niche-theme.ts), sem precisar de build por tenant.
         accent: {
-          DEFAULT: '#22d3a5',
-          dim: '#17a884',
-          bright: '#5cf0c8',
-          contrast: '#062018',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          dim: 'rgb(var(--accent-dim-rgb) / <alpha-value>)',
+          bright: 'rgb(var(--accent-bright-rgb) / <alpha-value>)',
+          contrast: 'rgb(var(--accent-contrast-rgb) / <alpha-value>)',
         },
         danger: '#ef5b5b',
         warn: '#e0a83c',

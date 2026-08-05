@@ -8,6 +8,7 @@ import { SidebarNavLinks, MobileNavLinks } from '@/components/dashboard/nav-link
 import { SignOutButton } from '@/components/dashboard/sign-out-button';
 import { TrialBanner } from '@/components/dashboard/trial-banner';
 import { AppointmentLimitBanner } from '@/components/dashboard/appointment-limit-banner';
+import { getNicheThemeVars } from '@/lib/niche-theme';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireCurrentUser();
@@ -16,7 +17,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const appointmentLimitCheck = evaluateAppointmentLimit(usedThisMonth, user.tenant.plan);
 
   return (
-    <div className="flex min-h-screen bg-base-950">
+    <div className="flex min-h-screen bg-base-950" style={getNicheThemeVars(user.tenant.niche) as React.CSSProperties}>
       <aside className="hidden w-60 shrink-0 flex-col border-r border-base-800 p-4 md:flex">
         <Link href="/dashboard" className="mb-6 px-2 font-display text-sm font-semibold uppercase tracking-[0.2em] text-accent">
           OneAgend

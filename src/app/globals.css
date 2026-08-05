@@ -5,6 +5,11 @@
 @layer base {
   :root {
     color-scheme: dark;
+    /* Verde da marca (default fora do painel/agenda, onde nao ha nicho definido). */
+    --accent-rgb: 34 211 165;
+    --accent-dim-rgb: 23 168 132;
+    --accent-bright-rgb: 92 240 200;
+    --accent-contrast-rgb: 6 32 24;
   }
 
   html,

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { BookingFlow } from '@/components/booking/booking-flow';
 import { isSubscriptionUsable } from '@/lib/billing/subscription-status';
 import { countAppointmentsInMonth, evaluateAppointmentLimit } from '@/lib/billing/appointment-limit';
+import { getNicheThemeVars } from '@/lib/niche-theme';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,7 @@ export default async function AgendarPage({ params }: { params: { slug: string }
       businessType: true,
       plan: true,
       timezone: true,
+      niche: true,
       subscription: { select: { status: true, trialEndsAt: true } },
       services: {
         where: { active: true },
@@ -49,7 +51,10 @@ export default async function AgendarPage({ params }: { params: { slug: string }
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col bg-base-950">
+    <main
+      className="mx-auto flex min-h-screen max-w-md flex-col bg-base-950"
+      style={getNicheThemeVars(tenant.niche) as React.CSSProperties}
+    >
       <BookingFlow tenant={tenant} />
     </main>
   );
