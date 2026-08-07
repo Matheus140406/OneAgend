@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-export function SignOutButton() {
+export function SignOutButton({ iconOnly = false }: { iconOnly?: boolean }) {
   const router = useRouter();
 
   async function handleSignOut() {
@@ -12,6 +12,14 @@ export function SignOutButton() {
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
+  }
+
+  if (iconOnly) {
+    return (
+      <button onClick={handleSignOut} title="Sair" className="shrink-0 text-base-500 transition-colors hover:text-base-100">
+        <LogOut size={12} />
+      </button>
+    );
   }
 
   return (

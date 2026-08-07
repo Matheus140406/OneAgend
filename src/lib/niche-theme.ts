@@ -7,7 +7,7 @@ import type { NicheType } from '@prisma/client';
  * aqui (dim = mais escura, bright = mais clara, contrast = cor de texto
  * legível em cima do accent, escolhida pela luminância real da cor).
  */
-const NICHE_ACCENT_HEX: Record<NicheType, string> = {
+export const NICHE_ACCENT_HEX: Record<NicheType, string> = {
   BEAUTY_SALON: '#C49A2E',
   HEALTH_CLINIC: '#2DA876',
   BARBERSHOP: '#5B7FC4',

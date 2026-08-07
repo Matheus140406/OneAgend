@@ -1,34 +1,27 @@
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { requireCurrentUser } from '@/lib/auth';
+import { checkPermission } from '@/lib/auth/rbac';
 import { prisma } from '@/lib/prisma';
 import { businessDateKey, addDaysToDateKey, zonedWallTimeToUtc, getBusinessMoment } from '@/lib/booking/time';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
 const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pendente',
-  CONFIRMED: 'Confirmado',
-  DONE: 'Concluído',
-  CANCELED: 'Cancelado',
-  NO_SHOW: 'Faltou',
+const STATUS_META: Record<string, { label: string; textClass: string; bgClass: string }> = {
+  PENDING: { label: 'Pendente', textClass: 'text-[#C49A2E]', bgClass: 'bg-[#C49A2E]/20' },
+  CONFIRMED: { label: 'Confirmado', textClass: 'text-[#2DA876]', bgClass: 'bg-[#2DA876]/20' },
+  DONE: { label: 'Concluído', textClass: 'text-base-500', bgClass: 'bg-white/10' },
+  CANCELED: { label: 'Cancelado', textClass: 'text-danger', bgClass: 'bg-danger/20' },
+  NO_SHOW: { label: 'Faltou', textClass: 'text-danger', bgClass: 'bg-danger/20' },
 };
 
-const STATUS_VARIANTS: Record<string, 'accent' | 'warn' | 'danger' | 'neutral'> = {
-  PENDING: 'warn',
-  CONFIRMED: 'accent',
-  DONE: 'neutral',
-  CANCELED: 'danger',
-  NO_SHOW: 'danger',
-};
-
-function StatusBadge({ status }: { status: string }) {
-  return <Badge variant={STATUS_VARIANTS[status] ?? 'neutral'}>{STATUS_LABELS[status] ?? status}</Badge>;
+function StatusChip({ status }: { status: string }) {
+  const meta = STATUS_META[status] ?? STATUS_META.PENDING!;
+  return <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold', meta.textClass, meta.bgClass)}>{meta.label}</span>;
 }
 
 export default async function AgendaPage({
@@ -38,7 +31,8 @@ export default async function AgendaPage({
 }) {
   const user = await requireCurrentUser();
   const timezone = user.tenant.timezone;
-  const view = searchParams.view === 'day' ? 'day' : 'week';
+  const view = searchParams.view === 'week' ? 'week' : 'day';
+  const canManageAll = await checkPermission(prisma, user.id, 'canManageScheduleAll');
   const professionalFilter =
     user.role === 'STAFF' ? user.professionalId ?? undefined : searchParams.professionalId;
 
@@ -65,27 +59,30 @@ export default async function AgendaPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold text-base-100">Agenda</h1>
-        <div className="flex gap-1 rounded-full border border-base-800 p-1">
-          <Link
-            href={toggleLink('day')}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium',
-              view === 'day' ? 'bg-accent/15 text-accent' : 'text-base-400',
-            )}
-          >
-            Dia
-          </Link>
-          <Link
-            href={toggleLink('week')}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium',
-              view === 'week' ? 'bg-accent/15 text-accent' : 'text-base-400',
-            )}
-          >
-            Semana
-          </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-xl font-bold text-base-100">Agenda</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-lg border border-white/[0.06] bg-base-850 p-1">
+            <Link
+              href={toggleLink('day')}
+              className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-all', view === 'day' ? 'bg-accent text-accent-contrast' : 'text-base-500')}
+            >
+              Dia
+            </Link>
+            <Link
+              href={toggleLink('week')}
+              className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-all', view === 'week' ? 'bg-accent text-accent-contrast' : 'text-base-500')}
+            >
+              Semana
+            </Link>
+          </div>
+          {canManageAll && (
+            <button className="flex items-center gap-1.5 rounded-niche bg-accent px-3 py-2 text-xs font-bold text-accent-contrast">
+              <Plus size={13} /> Agendar
+            </button>
+          )}
         </div>
       </div>
 
@@ -95,7 +92,7 @@ export default async function AgendaPage({
             href={professionalLink()}
             className={cn(
               'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium',
-              !professionalFilter ? 'border-accent bg-accent/10 text-accent' : 'border-base-800 text-base-300',
+              !professionalFilter ? 'border-accent bg-accent/10 text-accent' : 'border-white/[0.06] text-base-400',
             )}
           >
             Todos
@@ -106,9 +103,7 @@ export default async function AgendaPage({
               href={professionalLink(professional.id)}
               className={cn(
                 'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium',
-                professionalFilter === professional.id
-                  ? 'border-accent bg-accent/10 text-accent'
-                  : 'border-base-800 text-base-300',
+                professionalFilter === professional.id ? 'border-accent bg-accent/10 text-accent' : 'border-white/[0.06] text-base-400',
               )}
             >
               {professional.name}
@@ -164,15 +159,23 @@ async function DayView({
     return `/dashboard/agenda?${params.toString()}`;
   }
 
+  const confirmedCount = appointments.filter((a) => a.status === 'CONFIRMED').length;
+  const pendingCount = appointments.filter((a) => a.status === 'PENDING').length;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="font-display text-sm font-semibold capitalize text-base-100">{dateLabel}</p>
+        <div>
+          <p className="font-display text-sm font-semibold capitalize text-base-100">{dateLabel}</p>
+          <p className="text-xs text-base-500">
+            {confirmedCount} confirmado{confirmedCount === 1 ? '' : 's'} · {pendingCount} pendente{pendingCount === 1 ? '' : 's'}
+          </p>
+        </div>
         <div className="flex items-center gap-1">
-          <Link href={dayLink(addDaysToDateKey(dateKey, -1))} className="flex h-9 w-9 items-center justify-center rounded-lg border border-base-800 text-base-300 hover:bg-base-800">
+          <Link href={dayLink(addDaysToDateKey(dateKey, -1))} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] text-base-400 hover:bg-white/5">
             <ChevronLeft size={16} />
           </Link>
-          <Link href={dayLink(addDaysToDateKey(dateKey, 1))} className="flex h-9 w-9 items-center justify-center rounded-lg border border-base-800 text-base-300 hover:bg-base-800">
+          <Link href={dayLink(addDaysToDateKey(dateKey, 1))} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] text-base-400 hover:bg-white/5">
             <ChevronRight size={16} />
           </Link>
         </div>
@@ -182,22 +185,25 @@ async function DayView({
         {appointments.length === 0 ? (
           <p className="p-6 text-center text-sm text-base-500">Sem agendamentos neste dia.</p>
         ) : (
-          <ul className="divide-y divide-base-800">
+          <div className="divide-y divide-white/[0.06]">
             {appointments.map((appointment) => (
-              <li key={appointment.id} className="flex items-center justify-between gap-3 p-4">
-                <div className="flex items-center gap-3">
-                  <span className="w-14 shrink-0 font-mono text-sm text-base-300">{timeFormatter.format(appointment.startsAt)}</span>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-base-100">{appointment.client.name}</p>
+              <div key={appointment.id} className="group flex items-center gap-4 px-5 py-3 transition-colors hover:bg-white/[0.02]">
+                <span className="w-12 shrink-0 text-right font-mono text-xs text-base-500">{timeFormatter.format(appointment.startsAt)}</span>
+                <div className="h-10 w-px shrink-0 bg-white/[0.06]" />
+                <div className="flex flex-1 items-center gap-3 rounded-xl border border-accent/30 bg-accent/[0.08] px-4 py-2.5">
+                  <div className="h-8 w-1 shrink-0 rounded-full bg-accent" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-base-100">{appointment.client.name}</p>
                     <p className="truncate text-xs text-base-500">
-                      {appointment.service.name} · {appointment.professional.name}
+                      {appointment.service.name}
+                      {!professionalFilter ? ` · ${appointment.professional.name}` : ''}
                     </p>
                   </div>
+                  <StatusChip status={appointment.status} />
                 </div>
-                <StatusBadge status={appointment.status} />
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </Card>
     </div>
@@ -252,10 +258,10 @@ async function WeekView({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-end gap-1">
-        <Link href={weekLink(weekOffset - 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-base-800 text-base-300 hover:bg-base-800">
+        <Link href={weekLink(weekOffset - 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] text-base-400 hover:bg-white/5">
           <ChevronLeft size={16} />
         </Link>
-        <Link href={weekLink(weekOffset + 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-base-800 text-base-300 hover:bg-base-800">
+        <Link href={weekLink(weekOffset + 1)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] text-base-400 hover:bg-white/5">
           <ChevronRight size={16} />
         </Link>
       </div>
@@ -266,7 +272,7 @@ async function WeekView({
           const isToday = dateKey === todayKey;
           return (
             <Card key={dateKey} className={cn('flex flex-col', isToday && 'border-accent/60')}>
-              <div className="border-b border-base-800 p-3">
+              <div className="border-b border-white/[0.06] p-3">
                 <p className="text-xs uppercase text-base-500">{WEEKDAY_LABELS[index === 6 ? 0 : index + 1]}</p>
                 <p className={cn('font-display text-sm font-semibold', isToday ? 'text-accent' : 'text-base-100')}>
                   {dateKey.split('-').slice(1).reverse().join('/')}
@@ -275,10 +281,10 @@ async function WeekView({
               <div className="flex flex-1 flex-col gap-2 p-3">
                 {dayAppointments.length === 0 && <p className="text-xs text-base-600">Sem agendamentos</p>}
                 {dayAppointments.map((appointment) => (
-                  <div key={appointment.id} className="flex flex-col gap-1 rounded-lg bg-base-800/60 p-2">
+                  <div key={appointment.id} className="flex flex-col gap-1 rounded-lg border-l-2 border-accent bg-accent/[0.12] px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-base-100">{timeFormatter.format(appointment.startsAt)}</p>
-                      <StatusBadge status={appointment.status} />
+                      <StatusChip status={appointment.status} />
                     </div>
                     <p className="truncate text-xs text-base-300">{appointment.client.name}</p>
                     <p className="truncate text-[11px] text-base-500">

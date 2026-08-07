@@ -9,6 +9,8 @@ interface PlanDetails {
   maxAppointmentsPerMonth: number | null;
   hasWhatsappReminders: boolean;
   features: string[];
+  /** Recursos de planos superiores, mostrados riscados como incentivo de upgrade. */
+  locked: string[];
 }
 
 export const PLAN_DETAILS: Record<Plan, PlanDetails> = {
@@ -16,28 +18,53 @@ export const PLAN_DETAILS: Record<Plan, PlanDetails> = {
     label: 'Básico',
     maxProfessionals: 1,
     priceCents: 1420,
-    description: '1 profissional',
+    description: 'Para profissionais autônomos',
     maxAppointmentsPerMonth: 100,
     hasWhatsappReminders: false,
-    features: ['1 profissional', 'Até 100 agendamentos/mês', 'Agenda pública e painel'],
+    features: [
+      'Agenda pública (oneagend.com/agendar/slug)',
+      'Anti-conflito de horário automático',
+      'Login Google + e-mail',
+      'Painel com agenda e clientes',
+      '1 profissional',
+      'Até 100 agendamentos/mês',
+      'Teste grátis de 7 dias',
+    ],
+    locked: ['Lembretes via WhatsApp', 'Relatórios avançados'],
   },
   ELITE: {
     label: 'Elite',
     maxProfessionals: 5,
     priceCents: 4990,
-    description: 'Até 5 profissionais',
+    description: 'Para negócios em crescimento',
     maxAppointmentsPerMonth: 500,
     hasWhatsappReminders: true,
-    features: ['Até 5 profissionais', 'Até 500 agendamentos/mês', 'Lembrete automático por WhatsApp'],
+    features: [
+      'Tudo do Básico',
+      'Até 5 profissionais',
+      'Até 500 agendamentos/mês',
+      'Lembretes WhatsApp 24h e 1h antes',
+      'Bot de confirmar/reagendar/cancelar',
+      'Relatórios de agendamentos e receita',
+    ],
+    locked: [],
   },
   PLATINA: {
     label: 'Platina',
     maxProfessionals: null,
     priceCents: 9990,
-    description: 'Profissionais ilimitados',
+    description: 'Para operações sem limite',
     maxAppointmentsPerMonth: null,
     hasWhatsappReminders: true,
-    features: ['Profissionais ilimitados', 'Agendamentos ilimitados', 'Lembrete automático por WhatsApp'],
+    features: [
+      'Tudo do Elite',
+      'Profissionais ilimitados',
+      'Agendamentos ilimitados',
+      'Fila de espera com recuperação de no-show',
+      'Mensagens manuais por WhatsApp',
+      'Suporte prioritário',
+    ],
+    locked: [],
   },
 };
 
