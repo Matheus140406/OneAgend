@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Placeholders suficientes para o build (nenhuma rota é
+          # estaticamente renderizada com dados reais em build time —
+          # tudo que toca banco/Supabase é force-dynamic).
+          DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/oneagend?schema=public'
+          DIRECT_URL: 'postgresql://postgres:postgres@localhost:5432/oneagend?schema=public'
+          NEXT_PUBLIC_SUPABASE_URL: 'https://xxxxx.supabase.co'
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: 'public-anon-key'
+          SUPABASE_SERVICE_ROLE_KEY: 'service-role-key'
+          NEXT_PUBLIC_APP_URL: 'http://localhost:3000'
